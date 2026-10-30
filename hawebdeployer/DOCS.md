@@ -65,7 +65,20 @@ default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https
 
 La console du navigateur (F12) indique ce qui a été bloqué.
 
-## 4. Accès en réseau local (facultatif)
+## 4. Aperçu dans Home Assistant
+
+Le bouton **Ouvrir l'interface web** affiche le site dans Home Assistant,
+sans ouvrir de port. Seuls les utilisateurs connectés à Home Assistant y ont
+accès. Tu peux aussi l'ajouter à la barre latérale (option **Afficher dans
+la barre latérale**).
+
+Dans cet aperçu, les liens absolus (`/style.css`, `/page.html`) ne
+fonctionnent pas, car le site est servi sous une adresse du type
+`/api/hassio_ingress/...`. Utilise des liens relatifs (`style.css`,
+`page.html`, `../index.html`) : ils fonctionnent partout. Le site public
+n'est pas concerné.
+
+### Accès en réseau local (facultatif)
 
 Le port 8080 n'est pas ouvert par défaut. Pour tester le site depuis ton
 réseau local sans passer par Internet, indique un port dans la section
@@ -89,6 +102,8 @@ Ce que fait l'app :
   peut rien modifier.
 - Caddy et cloudflared tournent avec des utilisateurs **sans privilèges**.
 - L'app n'a **aucun accès** à l'API de Home Assistant ni au réseau de l'hôte.
+- L'aperçu Ingress n'accepte que les connexions du proxy de Home Assistant :
+  les autres apps du réseau interne sont refusées.
 - Les fichiers cachés (`.git`, `.env`...) ne sont jamais servis et les
   dossiers ne sont jamais listés.
 - En-têtes de sécurité envoyés avec chaque page : CSP, HSTS,

@@ -16,8 +16,13 @@ fi
 
 export SITE_ROOT="${site_root}"
 export CSP_HEADER=""
+export CSP_HEADER_INGRESS=""
 if bashio::config.has_value 'content_security_policy'; then
-    CSP_HEADER="header Content-Security-Policy \"$(bashio::config 'content_security_policy')\""
+    csp="$(bashio::config 'content_security_policy')"
+    CSP_HEADER="header Content-Security-Policy \"${csp}\""
+    # L'aperçu Ingress est affiché dans un cadre de Home Assistant : on l'y autorise
+    csp_ingress="$(sed -E "s/frame-ancestors[^;]*/frame-ancestors 'self'/" <<< "${csp}")"
+    CSP_HEADER_INGRESS="header Content-Security-Policy \"${csp_ingress}\""
 fi
 
 bashio::log.info "Démarrage de Caddy (site : ${SITE_ROOT})..."
