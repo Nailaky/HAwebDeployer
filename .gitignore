@@ -1,3 +1,3 @@
-# Page personnelle du garage : à copier dans /share/www de Home Assistant,
-# pas à publier dans ce dépôt public
+# Sites personnels : publiés depuis le panneau de l'app, pas dans ce dépôt public
 /garage/
+/site-mitosis/
