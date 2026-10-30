@@ -6,15 +6,20 @@
 
 worker="/share/$(bashio::config 'site_folder')/_worker.js"
 
-if [[ ! -f "${worker}" ]]; then
-    exec sleep infinity
-fi
-
 # Le worker est du code utilisateur : il ne doit lire ni le jeton du Supervisor
 # ni celui du tunnel. Il tourne sous son propre utilisateur, sans ces variables.
 chmod 700 /run/s6/container_environment
 chmod 600 /data/options.json 2>/dev/null || true
 
-bashio::log.info "Démarrage du worker ${worker}..."
+# Variables des options (env.NOM dans le worker), dans un fichier lisible par
+# le worker seul plutôt qu'en arguments de commande, visibles par tous
+install -d -m 700 -o worker /run/worker
+(
+    umask 077
+    bashio::app.config | jq -c '[.worker_variables[]? | {(.name): .value}] | add // {}' > /run/worker/vars.json
+)
+chown worker /run/worker/vars.json
+
+# Tourne même sans _worker.js : il se charge dès que le fichier apparaît
 exec s6-setuidgid worker env -i PATH=/usr/bin:/bin HA_URL=http://127.0.0.1:8124 \
     node /opt/hawebdeployer/runtime.mjs "${worker}"

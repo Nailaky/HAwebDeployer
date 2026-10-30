@@ -13,4 +13,5 @@ bashio::log.info "Démarrage de Cloudflare Tunnel..."
 # Passé par variable d'environnement pour ne pas apparaître dans la liste des processus
 TUNNEL_TOKEN="$(bashio::config 'cloudflare_tunnel_token')"
 export TUNNEL_TOKEN
-exec s6-setuidgid nobody cloudflared tunnel --no-autoupdate run
+# Métriques locales : le panneau y lit l'état du tunnel et les noms de domaine
+exec s6-setuidgid nobody cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 run

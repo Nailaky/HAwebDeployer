@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+- Panneau de publication : « Ouvrir l'interface web » permet de glisser le
+  dossier du site pour le publier d'un coup, de lister et supprimer les
+  fichiers, et affiche l'état du tunnel Cloudflare.
+- Plus besoin de redémarrer l'app pour un premier site ou un nouveau
+  `_worker.js`.
+- Le site est accessible sur le réseau local (port 8080 par défaut).
+- Nouvelle option « Variables du worker » : variables et secrets disponibles
+  dans `_worker.js` via `env.NOM`.
+- Le dossier `share` est désormais monté en écriture, pour le panneau
+  uniquement.
+
 ## 0.2.0
 
 - Code côté serveur : un `_worker.js` au format Cloudflare Worker, à la

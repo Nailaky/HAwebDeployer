@@ -14,10 +14,15 @@ configuration:
     description: >-
       Services the worker (_worker.js) may call, for example
       script.garage_ouvrir. Any other access to Home Assistant is refused.
+  worker_variables:
+    name: Worker variables
+    description: >-
+      Variables and secrets available in _worker.js as env.NAME (for example
+      an API key). Values are masked and never published with the site.
   content_security_policy:
     name: Content-Security-Policy
     description: >-
       CSP header sent with every page. Adjust it if your site loads external
       scripts or fonts. Empty = disabled (not recommended).
 network:
-  8080/tcp: Access to the site from the local network (disabled by default)
+  8080/tcp: Access to the site from the local network (empty = disabled)

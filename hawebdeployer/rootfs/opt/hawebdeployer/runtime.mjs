@@ -1,26 +1,36 @@
 // Exécute un worker au format Cloudflare (export default { fetch(request, env) })
 // derrière Caddy, qui lui transmet les requêtes non servies en statique.
 import http from "node:http";
-import { watchFile } from "node:fs";
+import { existsSync, readFileSync, watchFile } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const workerPath = process.argv[2];
 const PORT = 8787;
 const MAX_BODY = 64 * 1024;
 
-const env = Object.freeze({ HA_URL: process.env.HA_URL });
+// Variables définies dans les options de l'app (secrets compris)
+let vars = {};
+try {
+  vars = JSON.parse(readFileSync("/run/worker/vars.json", "utf8"));
+} catch {}
+const env = Object.freeze({ ...vars, HA_URL: process.env.HA_URL });
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 
+// Sans _worker.js, les requêtes non statiques reçoivent une 404
 let worker = null;
-try {
-  ({ default: worker } = await import(pathToFileURL(workerPath).href));
-  if (typeof worker?.fetch !== "function") {
-    worker = null;
-    throw new Error("le fichier doit contenir « export default { async fetch(request, env) { ... } } »");
+let loadFailed = false;
+if (existsSync(workerPath)) {
+  try {
+    ({ default: worker } = await import(pathToFileURL(workerPath).href));
+    if (typeof worker?.fetch !== "function") {
+      worker = null;
+      throw new Error("le fichier doit contenir « export default { async fetch(request, env) { ... } } »");
+    }
+  } catch (err) {
+    loadFailed = true;
+    console.error(`Impossible de charger ${workerPath} :`, err);
+    console.error("Il sera rechargé dès que le fichier sera modifié.");
   }
-} catch (err) {
-  console.error(`Impossible de charger ${workerPath} :`, err);
-  console.error("Il sera rechargé dès que le fichier sera modifié.");
 }
 
 process.on("unhandledRejection", (err) => console.error("Erreur non gérée dans le worker :", err));
@@ -46,7 +56,8 @@ function readBody(req) {
 http.createServer(async (req, res) => {
   try {
     if (!worker) {
-      res.writeHead(503).end();
+      if (loadFailed) res.writeHead(503).end();
+      else res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("404 Not Found");
       return;
     }
 
@@ -86,8 +97,10 @@ http.createServer(async (req, res) => {
   if (worker) console.log(`Worker ${workerPath} prêt`);
 });
 
-// Rechargement automatique : s6 relance le service quand le fichier change
-watchFile(workerPath, { interval: 2000 }, () => {
+// Rechargement automatique : s6 relance le service quand le fichier apparaît,
+// change ou disparaît
+watchFile(workerPath, { interval: 2000 }, (curr, prev) => {
+  if (curr.mtimeMs === prev.mtimeMs && curr.ino === prev.ino && curr.size === prev.size) return;
   console.log(`${workerPath} a changé, rechargement...`);
   process.exit(0);
 });

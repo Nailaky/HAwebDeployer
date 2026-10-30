@@ -36,12 +36,22 @@
 	}
 	encode zstd gzip
 
-	# Fichiers statiques d'abord, puis le worker s'il y en a un
+	# Rien de publié pour l'instant : page d'attente
+	@empty {
+		path /
+		not file /index.html /_worker.js
+	}
+	handle @empty {
+		root * /var/www/placeholder
+		file_server
+	}
+
+	# Fichiers statiques d'abord, puis le worker (_worker.js)
 	file_server {
 		pass_thru
 	}
 	request_header X-Real-IP {client_ip}
-	{$WORKER_HANDLER}
+	reverse_proxy 127.0.0.1:8787
 }
 
 (errors) {
@@ -63,7 +73,7 @@
 	import errors
 }
 
-# Aperçu dans Home Assistant (Ingress) : affiché dans un cadre de l'interface HA
+# Panneau de l'app dans Home Assistant (Ingress), affiché dans un cadre de HA
 :8099 {
 	route {
 		# Seul le proxy Ingress du Supervisor a le droit de se connecter
@@ -71,10 +81,33 @@
 		respond @outside 403 {
 			close
 		}
-		import site
+
+		# Aperçu du site
+		handle_path /apercu/* {
+			{$CSP_HEADER_INGRESS}
+			route {
+				import site
+			}
+		}
+
+		# API d'envoi des fichiers : socket accessible à Caddy seulement
+		handle /api/* {
+			header Cache-Control no-store
+			reverse_proxy unix//run/hawebdeployer/admin.sock
+		}
+
+		handle {
+			header {
+				Content-Security-Policy "default-src 'self'; img-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'none'"
+				Cache-Control no-cache
+				X-Content-Type-Options nosniff
+				-Server
+			}
+			root * /opt/hawebdeployer/admin
+			file_server
+		}
 	}
 	header X-Frame-Options SAMEORIGIN
-	{$CSP_HEADER_INGRESS}
 	import errors
 }
 

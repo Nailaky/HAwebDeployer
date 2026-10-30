@@ -1,35 +1,47 @@
 # HA Web Deployer
 
-Cette app héberge un site web directement sur Home Assistant et le publie sur
-Internet grâce à Cloudflare Tunnel. Le site peut être purement statique
-(HTML, CSS, JS, images) ou avoir du code côté serveur (`_worker.js`) capable
-d'appeler des services Home Assistant choisis.
+Cette app héberge un site web directement sur Home Assistant, le rend
+accessible sur ton réseau local et le publie sur Internet grâce à
+Cloudflare Tunnel. Le site peut être purement statique (HTML, CSS, JS,
+images) ou avoir du code côté serveur (`_worker.js`) capable d'appeler des
+services Home Assistant choisis.
 
 - Aucun port à ouvrir sur la box : le tunnel est une connexion sortante.
 - Home Assistant n'est **pas** exposé : seul le site l'est.
 - HTTPS, masquage de l'IP et protection anti-DDoS sont assurés par Cloudflare.
 
-## 1. Déposer le site
+## 1. Publier le site
 
-1. Copie les fichiers du site dans le dossier `share/www` de Home Assistant
-   (via l'app Samba, l'app File editor ou Studio Code Server).
-2. Le dossier doit contenir un `index.html` (ou un `_worker.js`, voir plus
-   bas) à sa racine.
-3. Démarre (ou redémarre) l'app.
+1. Démarre l'app, puis clique sur **Ouvrir l'interface web** (ou active
+   **Afficher dans la barre latérale**).
+2. Glisse le dossier de ton site dans le cadre **Publier**, ou utilise
+   **Choisir un dossier**. Le dossier doit contenir un `index.html` à sa
+   racine.
 
-Tant que le dossier est vide, une page « Bientôt disponible » est servie et
-le journal de l'app indique où déposer les fichiers. Une fois le site en
-place, les modifications de fichiers sont prises en compte immédiatement,
-sans redémarrage.
+C'est en ligne immédiatement, sans redémarrage :
 
-> Tout ce qui se trouve dans ce dossier est public, sauf `_worker.js` et les
-> fichiers cachés. N'y mets jamais de mot de passe ni de jeton.
+- **Un dossier** remplace tout le site d'un coup : les visiteurs voient
+  l'ancienne version jusqu'à ce que la nouvelle soit entièrement envoyée.
+- **Des fichiers seuls** (bouton **Ajouter des fichiers**) sont ajoutés ou
+  remplacent ceux du même nom.
+- Les fichiers et dossiers cachés (`.git`, `.env`, `.DS_Store`...) sont
+  ignorés.
+
+Le panneau liste les fichiers en ligne (avec un bouton pour les supprimer),
+affiche l'état du tunnel Cloudflare et donne un lien vers l'aperçu du site.
+
+Les fichiers sont stockés dans le dossier `share/www` de Home Assistant :
+tu peux aussi les modifier avec l'app Samba ou Studio Code Server.
+
+> Tout ce qui est publié est public, sauf `_worker.js`. Ne mets jamais de
+> mot de passe ni de jeton dans les fichiers du site : utilise les
+> variables du worker (plus bas).
 
 ## 2. Code côté serveur (`_worker.js`)
 
-Comme sur Cloudflare Pages, un fichier `_worker.js` à la racine du site reçoit
-toutes les requêtes qui ne correspondent à aucun fichier statique. Il utilise
-le même format qu'un Cloudflare Worker :
+Comme sur Cloudflare Pages, un fichier `_worker.js` à la racine du site
+reçoit toutes les requêtes qui ne correspondent à aucun fichier statique. Il
+utilise le même format qu'un Cloudflare Worker :
 
 ```js
 export default {
@@ -48,26 +60,39 @@ export default {
 };
 ```
 
-- `env.HA_URL` donne accès à l'API de Home Assistant **sans jeton** : l'app
-  l'ajoute elle-même, et seuls les services listés dans l'option
-  **Services Home Assistant autorisés** passent (ici `script.sonnette`).
-  Tout le reste est refusé (403).
-- L'adresse IP du visiteur est dans l'en-tête `X-Real-IP` (impossible à
-  falsifier par le visiteur).
-- Après avoir ajouté `_worker.js` pour la première fois, redémarre l'app.
-  Ensuite, chaque modification du fichier recharge le worker automatiquement.
-- Les scripts écrits directement dans le HTML sont bloqués par la
-  Content-Security-Policy : mets le JavaScript de tes pages dans des fichiers
-  `.js` séparés.
-- Utilise des chemins relatifs (`fetch("sonner")` plutôt que
-  `fetch("/sonner")`) pour que la page fonctionne aussi dans l'aperçu
-  Home Assistant.
+- **Accès à Home Assistant** : `env.HA_URL` donne accès à l'API de
+  Home Assistant **sans jeton**. L'app l'ajoute elle-même, et seuls les
+  services listés dans l'option **Services Home Assistant autorisés**
+  passent (ici `script.sonnette`). Tout le reste est refusé (403).
+- **Variables et secrets** : ajoute-les dans l'option **Variables du
+  worker** (nom + valeur masquée). Elles sont disponibles dans le worker sous
+  la forme `env.NOM`, comme les secrets d'un Cloudflare Worker. Elles restent
+  dans le stockage privé de l'app et ne sont jamais publiées avec le site.
+  Redémarre l'app après les avoir modifiées.
+- **Adresse du visiteur** : elle est dans l'en-tête `X-Real-IP`
+  (impossible à falsifier par le visiteur).
+- **Rechargement** : le worker est chargé dès que `_worker.js` est publié,
+  et rechargé à chaque modification.
+- **Scripts des pages** : les scripts écrits directement dans le HTML sont
+  bloqués par la Content-Security-Policy. Mets le JavaScript de tes pages
+  dans des fichiers `.js` séparés.
+- **Chemins relatifs** : écris `fetch("sonner")` plutôt que
+  `fetch("/sonner")` pour que la page fonctionne aussi dans l'aperçu.
 
 Une action déclenchée depuis Internet doit être protégée (code, Cloudflare
 Access...) et limitée contre les essais en série : le worker garde son état
 en mémoire entre les requêtes, ce qui permet de compter les échecs.
 
-## 3. Publier le site avec Cloudflare Tunnel
+## 3. Accès en réseau local
+
+Le site est accessible depuis tous les appareils de ton réseau sur le port
+8080 de Home Assistant, par exemple `http://192.168.1.20:8080`. Le panneau
+affiche ce lien.
+
+Pour changer ce port ou désactiver cet accès, va dans la section **Réseau**
+de l'app (champ vide = désactivé), puis redémarre l'app.
+
+## 4. Publier sur Internet avec Cloudflare Tunnel
 
 Prérequis : un nom de domaine géré par Cloudflare (compte gratuit suffisant).
 
@@ -82,19 +107,22 @@ Prérequis : un nom de domaine géré par Cloudflare (compte gratuit suffisant).
 4. Colle le jeton dans l'option **Jeton Cloudflare Tunnel** de l'app,
    enregistre et redémarre l'app.
 
-Le journal de l'app doit afficher `Registered tunnel connection`. Le site est
-alors accessible sur `https://www.mondomaine.fr`.
+Le panneau indique alors « Tunnel Cloudflare connecté » et le lien du site.
 
-> L'URL du service doit rester `localhost:8080`. Ne la fais jamais pointer
-> vers `homeassistant:8123` : cela exposerait Home Assistant.
+> Garde bien `localhost:8080` comme URL de service : le tunnel tourne dans
+> l'app, donc `localhost` désigne l'app elle-même (pas Home Assistant ni la
+> machine). Ne la fais jamais pointer vers `homeassistant:8123` : cela
+> exposerait Home Assistant. Le panneau affiche un avertissement si c'est le
+> cas.
 
-## 4. Options
+## 5. Options
 
 | Option | Rôle |
 |---|---|
 | Dossier du site | Sous-dossier de `share` qui contient le site. Défaut : `www`. |
 | Jeton Cloudflare Tunnel | Vide = le site n'est pas publié sur Internet. |
 | Services Home Assistant autorisés | Services que `_worker.js` peut appeler, par exemple `script.garage_ouvrir`. Vide = aucun. |
+| Variables du worker | Variables et secrets disponibles dans `_worker.js` (`env.NOM`). |
 | Content-Security-Policy | Limite ce que les pages peuvent charger. Voir ci-dessous. |
 
 ### Content-Security-Policy
@@ -111,52 +139,40 @@ default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https
 
 La console du navigateur (F12) indique ce qui a été bloqué.
 
-## 5. Aperçu dans Home Assistant
+### Aperçu dans Home Assistant
 
-Le bouton **Ouvrir l'interface web** affiche le site dans Home Assistant,
-sans ouvrir de port. Seuls les utilisateurs connectés à Home Assistant y ont
-accès. Tu peux aussi l'ajouter à la barre latérale (option **Afficher dans
-la barre latérale**).
-
-Dans cet aperçu, les liens absolus (`/style.css`, `/page.html`) ne
-fonctionnent pas, car le site est servi sous une adresse du type
-`/api/hassio_ingress/...`. Utilise des liens relatifs (`style.css`,
-`page.html`, `../index.html`) : ils fonctionnent partout. Le site public
-n'est pas concerné.
-
-### Accès en réseau local (facultatif)
-
-Le port 8080 n'est pas ouvert par défaut. Pour tester le site depuis ton
-réseau local sans passer par Internet, indique un port dans la section
-**Réseau** de l'app (par exemple `8080`), puis ouvre
-`http://<ip-de-home-assistant>:8080`.
+Le lien **Voir l'aperçu** du panneau affiche le site à travers
+Home Assistant. Les liens absolus (`/style.css`) n'y fonctionnent pas :
+utilise des liens relatifs (`style.css`), qui fonctionnent partout.
 
 ## 6. Dépannage
 
-| Message dans le journal | Cause |
+| Symptôme | Cause |
 |---|---|
-| `Aucun index.html ni _worker.js trouvé dans /share/www` | Le dossier du site est vide ou mal nommé. |
-| `Impossible de charger /share/www/_worker.js` | Erreur dans le code du worker (le détail suit dans le journal). |
+| Page « Bientôt disponible » | Aucun `index.html` à la racine du site. |
+| `Impossible de charger /share/www/_worker.js` dans le journal | Erreur dans le code du worker (le détail suit dans le journal). |
 | Le worker reçoit une erreur 403 de `env.HA_URL` | Le service n'est pas dans **Services Home Assistant autorisés**. |
-| `Register tunnel error ... Failed to get tunnel` | Jeton Cloudflare incorrect ou tunnel supprimé. |
-| `Registered tunnel connection` | Tout va bien : le tunnel est connecté. |
-| Erreur 502 sur le domaine | Dans Cloudflare, l'URL du service n'est pas `localhost:8080`. |
+| `Register tunnel error ... Failed to get tunnel` dans le journal | Jeton Cloudflare incorrect ou tunnel supprimé. |
+| Erreur 502 sur le domaine public | Dans Cloudflare, l'URL du service n'est pas `localhost:8080`. |
+| L'app ne démarre pas après une mise à jour | Le port 8080 est déjà utilisé par une autre app : change-le dans **Réseau**. |
 
 ## 7. Sécurité
 
 Ce que fait l'app :
 
-- Le dossier `share` est monté en **lecture seule** : le serveur web ne
-  peut rien modifier.
+- Seuls les administrateurs Home Assistant ont accès au panneau. L'envoi de
+  fichiers passe par un canal que seul le panneau peut utiliser : ni le site
+  public, ni le worker, ni les autres apps ne peuvent modifier le site.
 - Caddy, cloudflared et le worker tournent chacun avec leur propre
-  utilisateur **sans privilèges**.
+  utilisateur **sans privilèges** et ne peuvent pas modifier les fichiers du
+  site.
 - L'app a accès à l'API de Home Assistant (pour le worker), mais uniquement
   à travers un filtre : seuls les services listés dans les options, en POST,
   sont transmis. Le jeton du Supervisor est ajouté par ce filtre et n'est
   jamais visible par le worker, pas plus que le jeton du tunnel.
+- Les variables du worker sont transmises par un fichier que lui seul peut
+  lire, jamais en ligne de commande ni dans le journal.
 - L'app n'a pas accès au réseau de l'hôte.
-- L'aperçu Ingress n'accepte que les connexions du proxy de Home Assistant :
-  les autres apps du réseau interne sont refusées.
 - Les fichiers cachés (`.git`, `.env`...) et `_worker.js` ne sont jamais
   servis, et les dossiers ne sont jamais listés.
 - En-têtes de sécurité envoyés avec chaque page : CSP, HSTS,

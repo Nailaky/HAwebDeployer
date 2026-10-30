@@ -8,9 +8,13 @@ Home Assistant choisis.
 
 ```
 Visiteur ──HTTPS──► Cloudflare ◄──tunnel sortant── App HA Web Deployer
-                                                    ├─ Caddy :8080 → /share/www (lecture seule)
+Réseau local ──http://<ip>:8080──────────────────►  ├─ Caddy :8080 → /share/www
+Admin HA ──panneau (Ingress)─────────────────────►  ├─ glisser-déposer → publication
                                                     └─ _worker.js → filtre → services HA autorisés
 ```
+
+Pour publier, ouvre l'app dans Home Assistant (**Ouvrir l'interface web**)
+et glisse le dossier de ton site.
 
 ## Installation
 
@@ -53,7 +57,10 @@ hawebdeployer/
 ├── translations/        Libellés des options (fr, en)
 └── rootfs/
     ├── etc/caddy/Caddyfile
-    ├── etc/s6-overlay/  Services caddy, cloudflared et worker
-    ├── opt/hawebdeployer/runtime.mjs   Exécution de _worker.js (Node.js)
+    ├── etc/s6-overlay/  Services caddy, cloudflared, worker et admin
+    ├── opt/hawebdeployer/
+    │   ├── runtime.mjs  Exécution de _worker.js (Node.js)
+    │   ├── admin.mjs    API du panneau (envoi des fichiers)
+    │   └── admin/       Panneau glisser-déposer
     └── var/www/placeholder/index.html
 ```
