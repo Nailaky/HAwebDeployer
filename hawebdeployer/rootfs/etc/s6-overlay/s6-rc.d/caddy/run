@@ -1,0 +1,25 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Démarre Caddy, qui sert le site statique sur le port 8080
+# ==============================================================================
+
+site_folder="$(bashio::config 'site_folder')"
+site_root="/share/${site_folder}"
+
+if [[ ! -f "${site_root}/index.html" ]]; then
+    bashio::log.warning "Aucun index.html trouvé dans ${site_root}."
+    bashio::log.warning "Dépose ton site dans le dossier « share/${site_folder} » puis redémarre l'app."
+    bashio::log.warning "En attendant, une page d'attente est servie."
+    site_root="/var/www/placeholder"
+fi
+
+export SITE_ROOT="${site_root}"
+export CSP_HEADER=""
+if bashio::config.has_value 'content_security_policy'; then
+    CSP_HEADER="header Content-Security-Policy \"$(bashio::config 'content_security_policy')\""
+fi
+
+bashio::log.info "Démarrage de Caddy (site : ${SITE_ROOT})..."
+export HOME=/var/lib/caddy
+exec s6-setuidgid caddy caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

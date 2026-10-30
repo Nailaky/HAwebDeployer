@@ -1,0 +1,18 @@
+configuration:
+  site_folder:
+    name: Dossier du site
+    description: >-
+      Dossier dans « share » qui contient le site (avec un index.html à la
+      racine). Par défaut « www », c'est-à-dire /share/www.
+  cloudflare_tunnel_token:
+    name: Jeton Cloudflare Tunnel
+    description: >-
+      Jeton du tunnel créé dans Cloudflare Zero Trust. Laisser vide pour ne
+      pas publier le site sur Internet.
+  content_security_policy:
+    name: Content-Security-Policy
+    description: >-
+      En-tête CSP envoyé avec chaque page. Adapte-le si ton site charge des
+      scripts ou des polices externes. Vide = désactivé (déconseillé).
+network:
+  8080/tcp: Accès au site depuis le réseau local (désactivé par défaut)

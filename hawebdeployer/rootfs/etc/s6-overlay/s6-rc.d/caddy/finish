@@ -1,0 +1,12 @@
+#!/usr/bin/env bashio
+# ==============================================================================
+# Arrête l'app si Caddy plante, pour que le watchdog du Supervisor la relance
+# ==============================================================================
+
+declare exit_code=${1}
+
+if [[ "${exit_code}" -ne 0 ]] && [[ "${exit_code}" -ne 256 ]]; then
+    bashio::log.warning "Caddy s'est arrêté (code ${exit_code}), arrêt de l'app."
+    echo "${exit_code}" > /run/s6-linux-init-container-results/exitcode
+    exec /run/s6/basedir/bin/halt
+fi

@@ -1,0 +1,18 @@
+configuration:
+  site_folder:
+    name: Site folder
+    description: >-
+      Folder inside "share" that holds the site (with an index.html at its
+      root). Defaults to "www", i.e. /share/www.
+  cloudflare_tunnel_token:
+    name: Cloudflare Tunnel token
+    description: >-
+      Token of the tunnel created in Cloudflare Zero Trust. Leave empty to
+      keep the site off the Internet.
+  content_security_policy:
+    name: Content-Security-Policy
+    description: >-
+      CSP header sent with every page. Adjust it if your site loads external
+      scripts or fonts. Empty = disabled (not recommended).
+network:
+  8080/tcp: Access to the site from the local network (disabled by default)
