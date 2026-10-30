@@ -9,24 +9,31 @@
 <body>
 	<main>
 		<header>
-			<h1>Site web</h1>
-			<a class="button secondary" href="apercu/" target="_blank" rel="noopener">Voir l'aperçu ↗</a>
+			<h1>Sites web</h1>
 		</header>
 
-		<section class="card" aria-labelledby="etat-titre">
-			<h2 id="etat-titre">État</h2>
+		<section class="card" aria-label="Tunnel Cloudflare">
 			<ul class="status">
 				<li><span id="tunnel-dot" class="dot"></span><span id="tunnel-text">Chargement…</span></li>
-				<li><span id="site-dot" class="dot"></span><span id="site-text"></span></li>
 			</ul>
-			<ul id="hostnames" class="hostnames"></ul>
-			<p id="lan" class="lan" hidden>Sur ton réseau local : <a id="lan-link" target="_blank" rel="noopener"></a></p>
+			<ul id="tunnel-alerts" class="alerts"></ul>
 		</section>
 
-		<section class="card" aria-labelledby="publier-titre">
-			<h2 id="publier-titre">Publier</h2>
+		<nav id="tabs" class="tabs" aria-label="Sites"></nav>
+
+		<section class="card" aria-labelledby="site-title">
+			<div class="card-head">
+				<h2 id="site-title"></h2>
+				<a id="preview" class="button secondary" target="_blank" rel="noopener">Voir l'aperçu ↗</a>
+			</div>
+			<ul class="status">
+				<li><span id="site-dot" class="dot"></span><span id="site-text"></span></li>
+			</ul>
+			<ul id="links" class="links"></ul>
+			<p id="port-hint" class="hint" hidden></p>
+
 			<div id="dropzone" class="dropzone">
-				<p class="drop-title">Glisse ici le dossier de ton site</p>
+				<p class="drop-title">Glisse ici le dossier du site</p>
 				<p class="drop-hint">Il remplace tout le site d'un coup. Des fichiers seuls sont ajoutés ou remplacés.</p>
 				<div class="drop-actions">
 					<label class="button">
@@ -40,11 +47,9 @@
 				</div>
 			</div>
 			<p id="message" class="message" role="status" aria-live="polite"></p>
-		</section>
 
-		<section class="card" aria-labelledby="fichiers-titre">
-			<div class="card-head">
-				<h2 id="fichiers-titre">Fichiers en ligne</h2>
+			<div class="card-head files-head">
+				<h3>Fichiers en ligne</h3>
 				<button id="clear" class="link danger" type="button">Tout supprimer</button>
 			</div>
 			<p id="empty" class="empty" hidden>Aucun fichier pour l'instant.</p>

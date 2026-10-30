@@ -1,18 +1,17 @@
 #!/command/with-contenv bashio
 # shellcheck shell=bash
 # ==============================================================================
-# Exécute le worker (_worker.js) du site, s'il y en a un
+# Exécute les workers (_worker.js) des sites
 # ==============================================================================
 
-worker="/share/$(bashio::config 'site_folder')/_worker.js"
-
-# Le worker est du code utilisateur : il ne doit lire ni le jeton du Supervisor
-# ni celui du tunnel. Il tourne sous son propre utilisateur, sans ces variables.
+# Les workers sont du code utilisateur : ils ne doivent lire ni le jeton du
+# Supervisor ni celui du tunnel. Ils tournent sous leur propre utilisateur,
+# sans ces variables.
 chmod 700 /run/s6/container_environment
 chmod 600 /data/options.json 2>/dev/null || true
 
-# Variables des options (env.NOM dans le worker), dans un fichier lisible par
-# le worker seul plutôt qu'en arguments de commande, visibles par tous
+# Variables des options (env.NOM dans les workers), dans un fichier lisible par
+# les workers seuls plutôt qu'en arguments de commande, visibles par tous
 install -d -m 700 -o worker /run/worker
 (
     umask 077
@@ -20,6 +19,7 @@ install -d -m 700 -o worker /run/worker
 )
 chown worker /run/worker/vars.json
 
-# Tourne même sans _worker.js : il se charge dès que le fichier apparaît
+# Tourne même sans _worker.js : chaque worker se charge dès que son fichier apparaît
 exec s6-setuidgid worker env -i PATH=/usr/bin:/bin HA_URL=http://127.0.0.1:8124 \
-    node /opt/hawebdeployer/runtime.mjs "${worker}"
+    SITE_BASE="/share/$(bashio::config 'site_folder')" \
+    node /opt/hawebdeployer/runtime.mjs

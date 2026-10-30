@@ -1,12 +1,17 @@
-// Exécute un worker au format Cloudflare (export default { fetch(request, env) })
-// derrière Caddy, qui lui transmet les requêtes non servies en statique.
+// Exécute les workers des sites (format Cloudflare : export default { fetch })
+// derrière Caddy, qui leur transmet les requêtes non servies en statique et
+// indique le site concerné dans l'en-tête X-Site (son port).
 import http from "node:http";
 import { existsSync, readFileSync, watchFile } from "node:fs";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const workerPath = process.argv[2];
+const BASE = process.env.SITE_BASE;
+const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
 const PORT = 8787;
 const MAX_BODY = 64 * 1024;
+
+const siteRoot = (port) => (port === 8080 ? BASE : `${BASE}-${port}`);
 
 // Variables définies dans les options de l'app (secrets compris)
 let vars = {};
@@ -16,24 +21,35 @@ try {
 const env = Object.freeze({ ...vars, HA_URL: process.env.HA_URL });
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 
-// Sans _worker.js, les requêtes non statiques reçoivent une 404
-let worker = null;
-let loadFailed = false;
-if (existsSync(workerPath)) {
-  try {
-    ({ default: worker } = await import(pathToFileURL(workerPath).href));
-    if (typeof worker?.fetch !== "function") {
-      worker = null;
-      throw new Error("le fichier doit contenir « export default { async fetch(request, env) { ... } } »");
+// port -> worker chargé, ou null si son fichier contient une erreur
+const workers = new Map();
+for (const port of PORTS) {
+  const file = path.join(siteRoot(port), "_worker.js");
+  if (existsSync(file)) {
+    try {
+      const { default: worker } = await import(pathToFileURL(file).href);
+      if (typeof worker?.fetch !== "function") {
+        throw new Error("le fichier doit contenir « export default { async fetch(request, env) { ... } } »");
+      }
+      workers.set(port, worker);
+      console.log(`Worker du site ${port} prêt (${file})`);
+    } catch (err) {
+      workers.set(port, null);
+      console.error(`Impossible de charger ${file} :`, err);
+      console.error("Il sera rechargé dès que le fichier sera modifié.");
     }
-  } catch (err) {
-    loadFailed = true;
-    console.error(`Impossible de charger ${workerPath} :`, err);
-    console.error("Il sera rechargé dès que le fichier sera modifié.");
   }
+
+  // Rechargement automatique : s6 relance le service quand un fichier
+  // apparaît, change ou disparaît
+  watchFile(file, { interval: 2000 }, (curr, prev) => {
+    if (curr.mtimeMs === prev.mtimeMs && curr.ino === prev.ino && curr.size === prev.size) return;
+    console.log(`${file} a changé, rechargement des workers...`);
+    process.exit(0);
+  });
 }
 
-process.on("unhandledRejection", (err) => console.error("Erreur non gérée dans le worker :", err));
+process.on("unhandledRejection", (err) => console.error("Erreur non gérée dans un worker :", err));
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -55,13 +71,18 @@ function readBody(req) {
 
 http.createServer(async (req, res) => {
   try {
+    const port = Number(req.headers["x-site"]);
+    if (!workers.has(port)) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("404 Not Found");
+      return;
+    }
+    const worker = workers.get(port);
     if (!worker) {
-      if (loadFailed) res.writeHead(503).end();
-      else res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("404 Not Found");
+      res.writeHead(503).end();
       return;
     }
 
-    // Caddy transmet l'adresse publique d'origine (Cloudflare ou Ingress)
+    // Caddy transmet l'adresse publique d'origine (Cloudflare, réseau local ou Ingress)
     const first = (value) => value?.split(",")[0].trim();
     const proto = first(req.headers["x-forwarded-proto"]) || "http";
     const host = first(req.headers["x-forwarded-host"]) || req.headers.host;
@@ -86,6 +107,12 @@ http.createServer(async (req, res) => {
     });
     const cookies = response.headers.getSetCookie();
     if (cookies.length) out["set-cookie"] = cookies;
+    // Comme sur Cloudflare, le worker gère sa propre CSP. S'il n'en envoie pas,
+    // ce minimum évite que Caddy applique celle des fichiers statiques, qui
+    // bloquerait ses scripts intégrés au HTML.
+    if (!response.headers.has("content-security-policy")) {
+      out["content-security-policy"] = "object-src 'none'; base-uri 'self'";
+    }
     res.writeHead(response.status, out);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch (err) {
@@ -93,14 +120,4 @@ http.createServer(async (req, res) => {
     if (!res.headersSent) res.writeHead(err.status || 500);
     res.end();
   }
-}).listen(PORT, "127.0.0.1", () => {
-  if (worker) console.log(`Worker ${workerPath} prêt`);
-});
-
-// Rechargement automatique : s6 relance le service quand le fichier apparaît,
-// change ou disparaît
-watchFile(workerPath, { interval: 2000 }, (curr, prev) => {
-  if (curr.mtimeMs === prev.mtimeMs && curr.ino === prev.ino && curr.size === prev.size) return;
-  console.log(`${workerPath} a changé, rechargement...`);
-  process.exit(0);
-});
+}).listen(PORT, "127.0.0.1");

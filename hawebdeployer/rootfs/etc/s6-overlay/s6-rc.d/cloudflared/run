@@ -5,7 +5,7 @@
 # ==============================================================================
 
 if ! bashio::config.has_value 'cloudflare_tunnel_token'; then
-    bashio::log.info "Aucun jeton Cloudflare Tunnel : le site n'est pas publié sur Internet."
+    bashio::log.info "Aucun jeton Cloudflare Tunnel : les sites ne sont pas publiés sur Internet."
     exec sleep infinity
 fi
 

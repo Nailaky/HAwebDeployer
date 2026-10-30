@@ -1,20 +1,20 @@
 # HA Web Deployer
 
-Dépôt d'app Home Assistant qui héberge un site web sur Home Assistant et le
-publie sur Internet via Cloudflare Tunnel, sans ouvrir de port et sans
-exposer Home Assistant. Le site peut avoir du code côté serveur
-(`_worker.js`, format Cloudflare Worker) qui appelle des services
-Home Assistant choisis.
+Dépôt d'app Home Assistant qui héberge jusqu'à 10 sites web sur
+Home Assistant (un par port, 8080 à 8089) et les publie sur Internet via
+Cloudflare Tunnel, sans ouvrir de port et sans exposer Home Assistant. Chaque
+site peut avoir du code côté serveur (`_worker.js`, format Cloudflare Worker)
+qui appelle des services Home Assistant choisis.
 
 ```
 Visiteur ──HTTPS──► Cloudflare ◄──tunnel sortant── App HA Web Deployer
-Réseau local ──http://<ip>:8080──────────────────►  ├─ Caddy :8080 → /share/www
+Réseau local ──http://<ip>:8080..8089────────────►  ├─ Caddy : un site par port → /share/www, /share/www-8081...
 Admin HA ──panneau (Ingress)─────────────────────►  ├─ glisser-déposer → publication
                                                     └─ _worker.js → filtre → services HA autorisés
 ```
 
-Pour publier, ouvre l'app dans Home Assistant (**Ouvrir l'interface web**)
-et glisse le dossier de ton site.
+Pour publier, ouvre l'app dans Home Assistant (**Ouvrir l'interface web**),
+choisis le site et glisse son dossier.
 
 ## Installation
 

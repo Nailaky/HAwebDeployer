@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Plusieurs sites : jusqu'à 10, un par port (8080 à 8089), chacun avec son
+  dossier et son `_worker.js`. Le panneau a un onglet par site et un bouton
+  « + Nouveau site ». Les ports autres que 8080 s'activent dans « Réseau ».
+- Un Cloudflare Worker fonctionne tel quel : la CSP des options ne
+  s'applique plus aux réponses des workers, qui gèrent la leur.
+- Le panneau propose de publier un `worker.js` sous le nom `_worker.js`, et
+  signale un `worker.js` mal nommé déjà en ligne.
+
 ## 0.3.0
 
 - Panneau de publication : « Ouvrir l'interface web » permet de glisser le

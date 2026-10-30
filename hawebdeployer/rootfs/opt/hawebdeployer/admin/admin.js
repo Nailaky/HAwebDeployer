@@ -4,6 +4,11 @@ const $ = (selector) => document.querySelector(selector);
 const dropzone = $("#dropzone");
 const message = $("#message");
 
+const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
+let status = { tunnel: { state: "desactive", hostnames: [] }, sites: [] };
+let current = PORTS.includes(Number(location.hash.slice(1))) ? Number(location.hash.slice(1)) : 8080;
+const created = new Set([current]); // nouveaux sites encore vides, affichés quand même
+
 function api(path, options = {}) {
 	return fetch(`api/${path}`, {
 		...options,
@@ -20,6 +25,7 @@ async function apiJson(path, options) {
 
 const encodePath = (p) => p.split("/").map(encodeURIComponent).join("/");
 const isHidden = (p) => p.split("/").some((part) => part.startsWith(".") && part !== ".well-known");
+const servicePort = (service) => Number(service?.match(/^https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)\/?$/)?.[1]);
 
 function formatSize(bytes) {
 	if (bytes < 1024) return `${bytes} o`;
@@ -32,67 +38,97 @@ function say(text, kind = "") {
 	message.className = `message ${kind}`;
 }
 
-function setDot(el, kind) {
-	el.className = `dot ${kind}`;
+function element(tag, props = {}, ...children) {
+	const el = Object.assign(document.createElement(tag), props);
+	el.append(...children);
+	return el;
 }
 
-async function refreshStatus() {
-	const status = await apiJson("status");
+const siteInfo = (port) => status.sites.find((s) => s.port === port);
+const siteState = (site) => (site?.strayWorker ? "warn" : site?.hasIndex || site?.hasWorker ? "ok" : "");
 
-	const tunnel = {
-		connecte: ["ok", "Tunnel Cloudflare connecté : le site est en ligne"],
-		deconnecte: ["warn", "Tunnel Cloudflare configuré mais pas connecté (voir le journal)"],
-		desactive: ["", "Pas de tunnel Cloudflare : le site n'est pas publié sur Internet"],
+// Adresse sur le réseau local : même machine que Home Assistant
+const host = location.hostname;
+const isLocalHost = /^(10|127)\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|\.local$|^[^.:]+$/.test(host);
+
+function renderTunnel() {
+	const [kind, text] = {
+		connecte: ["ok", "Tunnel Cloudflare connecté"],
+		deconnecte: ["warn", "Tunnel Cloudflare configuré mais pas connecté (voir le journal de l'app)"],
+		desactive: ["", "Pas de tunnel Cloudflare : les sites ne sont pas publiés sur Internet"],
 	}[status.tunnel.state];
-	setDot($("#tunnel-dot"), tunnel[0]);
-	$("#tunnel-text").textContent = tunnel[1];
+	$("#tunnel-dot").className = `dot ${kind}`;
+	$("#tunnel-text").textContent = text;
 
-	const site = status.hasWorker && status.hasIndex ? "index.html et _worker.js présents"
-		: status.hasWorker ? "_worker.js présent"
-		: status.hasIndex ? "index.html présent"
-		: "Aucun index.html : une page d'attente est affichée";
-	setDot($("#site-dot"), status.hasIndex || status.hasWorker ? "ok" : "warn");
-	$("#site-text").textContent = `Dossier share/${status.folder} — ${site}`;
+	// Noms de domaine qui ne pointent vers aucun site de l'app
+	$("#tunnel-alerts").replaceChildren(...status.tunnel.hostnames
+		.filter(({ service }) => !PORTS.includes(servicePort(service)))
+		.map(({ hostname, service }) => element("li", {
+			textContent: `⚠ ${hostname} pointe vers ${service} : il doit pointer vers localhost:8080 à 8089`,
+		})));
+}
 
-	const list = $("#hostnames");
-	list.replaceChildren(...status.tunnel.hostnames.map(({ hostname, service }) => {
-		const li = document.createElement("li");
-		const link = document.createElement("a");
-		link.href = `https://${hostname}/`;
-		link.target = "_blank";
-		link.rel = "noopener";
-		link.textContent = `https://${hostname}`;
-		li.append(link);
-		if (!/^https?:\/\/(localhost|127\.0\.0\.1):8080\/?$/.test(service)) {
-			const alert = document.createElement("div");
-			alert.className = "alert";
-			alert.textContent = `⚠ Ce nom pointe vers ${service} au lieu de localhost:8080`;
-			li.append(alert);
-		}
-		return li;
-	}));
+function renderTabs() {
+	const visible = PORTS.filter((port) => port === 8080 || created.has(port) || siteInfo(port)?.files > 0);
+	const tabs = visible.map((port) => {
+		const tab = element("button", { type: "button", className: "tab" },
+			element("span", { className: `dot ${siteState(siteInfo(port))}` }), `Port ${port}`);
+		tab.setAttribute("aria-current", String(port === current));
+		tab.addEventListener("click", () => select(port));
+		return tab;
+	});
+	const free = PORTS.find((port) => !visible.includes(port));
+	if (free) {
+		const add = element("button", { type: "button", className: "tab new", textContent: "+ Nouveau site" });
+		add.addEventListener("click", () => {
+			created.add(free);
+			select(free);
+		});
+		tabs.push(add);
+	}
+	$("#tabs").replaceChildren(...tabs);
+}
+
+function renderSite() {
+	const site = siteInfo(current);
+	$("#site-title").textContent = `Site du port ${current}`;
+	$("#preview").href = `apercu/${current}/`;
+
+	const state = site?.strayWorker ? "worker.js n'est pas exécuté : il doit s'appeler _worker.js (republie-le depuis ce panneau)"
+		: site?.hasWorker && site?.hasIndex ? "index.html et _worker.js présents"
+		: site?.hasWorker ? "_worker.js présent"
+		: site?.hasIndex ? "index.html présent"
+		: "Rien de publié : une page d'attente est affichée";
+	$("#site-dot").className = `dot ${siteState(site) || "warn"}`;
+	$("#site-text").textContent = `Dossier share/${site?.folder ?? ""} — ${state}`;
+
+	const links = [];
+	if (isLocalHost) {
+		const url = `http://${host}:${current}`;
+		links.push(element("li", {}, element("span", { className: "label", textContent: "Réseau local : " }),
+			element("a", { href: `${url}/`, target: "_blank", rel: "noopener", textContent: url })));
+	}
+	for (const { hostname } of status.tunnel.hostnames.filter(({ service }) => servicePort(service) === current)) {
+		links.push(element("li", {}, element("span", { className: "label", textContent: "Internet : " }),
+			element("a", { href: `https://${hostname}/`, target: "_blank", rel: "noopener", textContent: `https://${hostname}` })));
+	}
+	$("#links").replaceChildren(...links);
+
+	const hint = $("#port-hint");
+	hint.hidden = current === 8080;
+	hint.textContent = `Sur le réseau local, ce site n'est visible que si le port ${current} est activé dans l'onglet Réseau de l'app. `
+		+ `Sur Internet, ajoute un nom de domaine qui pointe vers localhost:${current} dans le tunnel Cloudflare.`;
 }
 
 async function refreshFiles() {
-	const { files } = await apiJson("files");
+	const { files } = await apiJson(`sites/${current}/files`);
 	const rows = files.map((file) => {
-		const tr = document.createElement("tr");
-		const name = document.createElement("td");
-		name.className = "path";
-		name.textContent = file.path;
-		const size = document.createElement("td");
-		size.className = "size";
-		size.textContent = formatSize(file.size);
-		const actions = document.createElement("td");
-		actions.className = "actions";
-		const remove = document.createElement("button");
-		remove.type = "button";
-		remove.className = "link danger";
-		remove.textContent = "Supprimer";
+		const remove = element("button", { type: "button", className: "link danger", textContent: "Supprimer" });
 		remove.addEventListener("click", () => removeFile(file.path));
-		actions.append(remove);
-		tr.append(name, size, actions);
-		return tr;
+		return element("tr", {},
+			element("td", { className: "path", textContent: file.path }),
+			element("td", { className: "size", textContent: formatSize(file.size) }),
+			element("td", { className: "actions" }, remove));
 	});
 	$("#files tbody").replaceChildren(...rows);
 	$("#empty").hidden = files.length > 0;
@@ -101,14 +137,35 @@ async function refreshFiles() {
 
 async function refresh() {
 	try {
-		await Promise.all([refreshStatus(), refreshFiles()]);
+		status = await apiJson("status");
+		renderTunnel();
+		renderTabs();
+		renderSite();
+		await refreshFiles();
 	} catch (err) {
 		say(`Impossible de joindre l'app : ${err.message}`, "error");
 	}
 }
 
+function select(port) {
+	current = port;
+	history.replaceState(null, "", `#${port}`);
+	say("");
+	refresh();
+}
+
 // items : [{ path, file }] ; replace : remplacer tout le site par ces fichiers
 async function publish(items, replace) {
+	const port = current;
+
+	// Un Cloudflare Worker gardé sous son nom d'origine ne serait pas exécuté
+	const plain = items.find((item) => item.path === "worker.js");
+	if (plain && !items.some((item) => item.path === "_worker.js")
+		&& /export\s+default/.test(await plain.file.text())
+		&& confirm("worker.js ressemble à un Cloudflare Worker. Le publier sous le nom _worker.js, pour qu'il soit exécuté par le serveur (et jamais envoyé tel quel aux visiteurs) ?")) {
+		plain.path = "_worker.js";
+	}
+
 	const kept = items.filter((item) => !isHidden(item.path));
 	const skipped = items.length - kept.length;
 	if (kept.length === 0) {
@@ -116,16 +173,16 @@ async function publish(items, replace) {
 		return;
 	}
 	if (replace && !kept.some((i) => i.path === "index.html" || i.path === "_worker.js")
-		&& !confirm("Ce dossier n'a pas d'index.html à sa racine. Le publier quand même ?")) {
+		&& !confirm("Ce dossier n'a ni index.html ni _worker.js à sa racine. Le publier quand même ?")) {
 		return;
 	}
 
 	dropzone.classList.add("busy");
 	let deployId = null;
 	try {
-		let base = "files/";
+		let base = `sites/${port}/files/`;
 		if (replace) {
-			deployId = (await apiJson("deploys", { method: "POST" })).id;
+			deployId = (await apiJson(`sites/${port}/deploys`, { method: "POST" })).id;
 			base = `deploys/${deployId}/files/`;
 		}
 		for (const [index, { path, file }] of kept.entries()) {
@@ -135,7 +192,7 @@ async function publish(items, replace) {
 		if (deployId) await apiJson(`deploys/${deployId}/publish`, { method: "POST" });
 
 		const ignored = skipped ? ` (${skipped} fichier(s) caché(s) ignoré(s))` : "";
-		say(replace ? `Site publié : ${kept.length} fichier(s)${ignored}.`
+		say(replace ? `Site publié sur le port ${port} : ${kept.length} fichier(s)${ignored}.`
 			: `${kept.length} fichier(s) ajouté(s)${ignored}.`, "ok");
 	} catch (err) {
 		if (deployId) await api(`deploys/${deployId}`, { method: "DELETE" }).catch(() => {});
@@ -149,7 +206,7 @@ async function publish(items, replace) {
 async function removeFile(path) {
 	if (!confirm(`Supprimer ${path} du site ?`)) return;
 	try {
-		await apiJson(`files/${encodePath(path)}`, { method: "DELETE" });
+		await apiJson(`sites/${current}/files/${encodePath(path)}`, { method: "DELETE" });
 		say(`${path} supprimé.`, "ok");
 	} catch (err) {
 		say(err.message, "error");
@@ -158,9 +215,15 @@ async function removeFile(path) {
 }
 
 $("#clear").addEventListener("click", async () => {
-	if (!confirm("Supprimer tous les fichiers du site ?")) return;
+	if (!confirm(`Supprimer tous les fichiers du site du port ${current} ?`)) return;
 	try {
-		await apiJson("files", { method: "DELETE" });
+		await apiJson(`sites/${current}/files`, { method: "DELETE" });
+		created.delete(current);
+		// Un site supplémentaire vidé disparaît : on revient au site principal
+		if (current !== 8080) {
+			select(8080);
+			return;
+		}
 		say("Site vidé.", "ok");
 	} catch (err) {
 		say(err.message, "error");
@@ -223,14 +286,12 @@ $("#pick-files").addEventListener("change", (event) => {
 	if (items.length) publish(items, false);
 });
 
-// Adresse du site sur le réseau local : même machine que Home Assistant, port 8080
-const host = location.hostname;
-if (/^(10|127)\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|\.local$|^[^.:]+$/.test(host)) {
-	const link = $("#lan-link");
-	link.href = `http://${host}:8080/`;
-	link.textContent = `http://${host}:8080`;
-	$("#lan").hidden = false;
-}
-
 refresh();
-setInterval(refreshStatus, 15000);
+setInterval(async () => {
+	try {
+		status = await apiJson("status");
+		renderTunnel();
+		renderTabs();
+		renderSite();
+	} catch {}
+}, 15000);

@@ -1,29 +1,39 @@
 configuration:
   site_folder:
-    name: Dossier du site
+    name: Dossier des sites
     description: >-
-      Dossier dans « share » qui contient le site (avec un index.html à la
-      racine). Par défaut « www », c'est-à-dire /share/www.
+      Dossier dans « share » du site du port 8080. Les autres sites sont
+      dans <dossier>-<port> (par défaut /share/www, /share/www-8081...).
   cloudflare_tunnel_token:
     name: Jeton Cloudflare Tunnel
     description: >-
       Jeton du tunnel créé dans Cloudflare Zero Trust. Laisser vide pour ne
-      pas publier le site sur Internet.
+      pas publier les sites sur Internet.
   ha_services:
     name: Services Home Assistant autorisés
     description: >-
-      Services que le worker (_worker.js) peut appeler, par exemple
+      Services que les workers (_worker.js) peuvent appeler, par exemple
       script.garage_ouvrir. Tout autre accès à Home Assistant est refusé.
   worker_variables:
-    name: Variables du worker
+    name: Variables des workers
     description: >-
       Variables et secrets accessibles dans _worker.js via env.NOM (par
-      exemple une clé d'API). Les valeurs sont masquées et ne sont jamais
-      publiées avec le site.
+      exemple une clé d'API), pour tous les sites. Les valeurs sont masquées
+      et ne sont jamais publiées avec les sites.
   content_security_policy:
     name: Content-Security-Policy
     description: >-
-      En-tête CSP envoyé avec chaque page. Adapte-le si ton site charge des
-      scripts ou des polices externes. Vide = désactivé (déconseillé).
+      En-tête CSP envoyé avec les fichiers statiques (un worker gère la
+      sienne). Adapte-le si ton site charge des scripts ou des polices
+      externes. Vide = désactivé (déconseillé).
 network:
-  8080/tcp: Accès au site depuis le réseau local (vide = désactivé)
+  8080/tcp: Site du port 8080 sur le réseau local (vide = désactivé)
+  8081/tcp: Site du port 8081 sur le réseau local (vide = désactivé)
+  8082/tcp: Site du port 8082 sur le réseau local (vide = désactivé)
+  8083/tcp: Site du port 8083 sur le réseau local (vide = désactivé)
+  8084/tcp: Site du port 8084 sur le réseau local (vide = désactivé)
+  8085/tcp: Site du port 8085 sur le réseau local (vide = désactivé)
+  8086/tcp: Site du port 8086 sur le réseau local (vide = désactivé)
+  8087/tcp: Site du port 8087 sur le réseau local (vide = désactivé)
+  8088/tcp: Site du port 8088 sur le réseau local (vide = désactivé)
+  8089/tcp: Site du port 8089 sur le réseau local (vide = désactivé)

@@ -1,34 +1,42 @@
 #!/command/with-contenv bashio
 # shellcheck shell=bash
 # ==============================================================================
-# Démarre Caddy, qui sert le site sur le port 8080 (public) et 8099 (Ingress)
+# Démarre Caddy : un site par port (8080 à 8089) et le panneau (Ingress, 8099)
 # ==============================================================================
 
-export SITE_ROOT="/share/$(bashio::config 'site_folder')"
-mkdir -p "${SITE_ROOT}"
+site_base="/share/$(bashio::config 'site_folder')"
 
-if [[ ! -f "${SITE_ROOT}/index.html" && ! -f "${SITE_ROOT}/_worker.js" ]]; then
-    bashio::log.info "Le site est vide : publie-le depuis « Ouvrir l'interface web »."
-fi
+# Un site par port : 8080 utilise le dossier du site, les autres <dossier>-<port>
+mkdir -p /run/caddy
+: > /run/caddy/sites.caddy
+: > /run/caddy/previews.caddy
+for port in {8080..8089}; do
+    root="${site_base}"
+    [[ "${port}" != 8080 ]] && root="${site_base}-${port}"
+    echo "import public ${port} ${root}" >> /run/caddy/sites.caddy
+    echo "import preview ${port} ${root}" >> /run/caddy/previews.caddy
+done
 
+# « ? » : la CSP des options ne s'applique qu'aux réponses qui n'en ont pas.
+# Un worker gère la sienne, comme sur Cloudflare.
 export CSP_HEADER=""
 export CSP_HEADER_INGRESS=""
 if bashio::config.has_value 'content_security_policy'; then
     csp="$(bashio::config 'content_security_policy')"
-    CSP_HEADER="header Content-Security-Policy \"${csp}\""
-    # L'aperçu Ingress est affiché dans un cadre de Home Assistant : on l'y autorise
+    CSP_HEADER="header ?Content-Security-Policy \"${csp}\""
+    # L'aperçu est affiché dans un cadre de Home Assistant : on l'y autorise
     csp_ingress="$(sed -E "s/frame-ancestors[^;]*/frame-ancestors 'self'/" <<< "${csp}")"
-    CSP_HEADER_INGRESS="header Content-Security-Policy \"${csp_ingress}\""
+    CSP_HEADER_INGRESS="header ?Content-Security-Policy \"${csp_ingress}\""
 fi
 
-# Services Home Assistant que le worker peut appeler (script.x -> /api/services/script/x)
+# Services Home Assistant que les workers peuvent appeler (script.x -> /api/services/script/x)
 paths=()
 for service in $(bashio::config 'ha_services'); do
     paths+=("/api/services/${service/./\/}")
-    bashio::log.info "Service Home Assistant autorisé pour le worker : ${service}"
+    bashio::log.info "Service Home Assistant autorisé pour les workers : ${service}"
 done
 export HA_SERVICE_PATHS="${paths[*]:-/aucun-service-autorise}"
 
-bashio::log.info "Démarrage de Caddy (site : ${SITE_ROOT})..."
+bashio::log.info "Démarrage de Caddy (sites dans ${site_base}, ${site_base}-8081...)"
 export HOME=/var/lib/caddy
 exec s6-setuidgid caddy caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

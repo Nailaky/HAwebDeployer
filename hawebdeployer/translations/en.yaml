@@ -1,28 +1,38 @@
 configuration:
   site_folder:
-    name: Site folder
+    name: Sites folder
     description: >-
-      Folder inside "share" that holds the site (with an index.html at its
-      root). Defaults to "www", i.e. /share/www.
+      Folder inside "share" of the site on port 8080. Other sites live in
+      <folder>-<port> (by default /share/www, /share/www-8081...).
   cloudflare_tunnel_token:
     name: Cloudflare Tunnel token
     description: >-
       Token of the tunnel created in Cloudflare Zero Trust. Leave empty to
-      keep the site off the Internet.
+      keep the sites off the Internet.
   ha_services:
     name: Allowed Home Assistant services
     description: >-
-      Services the worker (_worker.js) may call, for example
+      Services the workers (_worker.js) may call, for example
       script.garage_ouvrir. Any other access to Home Assistant is refused.
   worker_variables:
     name: Worker variables
     description: >-
       Variables and secrets available in _worker.js as env.NAME (for example
-      an API key). Values are masked and never published with the site.
+      an API key), for every site. Values are masked and never published.
   content_security_policy:
     name: Content-Security-Policy
     description: >-
-      CSP header sent with every page. Adjust it if your site loads external
-      scripts or fonts. Empty = disabled (not recommended).
+      CSP header sent with static files (a worker handles its own). Adjust it
+      if your site loads external scripts or fonts. Empty = disabled (not
+      recommended).
 network:
-  8080/tcp: Access to the site from the local network (empty = disabled)
+  8080/tcp: Site on port 8080 on the local network (empty = disabled)
+  8081/tcp: Site on port 8081 on the local network (empty = disabled)
+  8082/tcp: Site on port 8082 on the local network (empty = disabled)
+  8083/tcp: Site on port 8083 on the local network (empty = disabled)
+  8084/tcp: Site on port 8084 on the local network (empty = disabled)
+  8085/tcp: Site on port 8085 on the local network (empty = disabled)
+  8086/tcp: Site on port 8086 on the local network (empty = disabled)
+  8087/tcp: Site on port 8087 on the local network (empty = disabled)
+  8088/tcp: Site on port 8088 on the local network (empty = disabled)
+  8089/tcp: Site on port 8089 on the local network (empty = disabled)

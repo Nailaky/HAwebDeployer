@@ -1,6 +1,7 @@
-// API du panneau d'administration (Ingress) : état du tunnel, liste, envoi et
-// suppression des fichiers du site. Écoute sur un socket Unix que seul Caddy
-// peut ouvrir : ni le worker ni le site public n'y ont accès.
+// API du panneau d'administration (Ingress) : état du tunnel et, pour chaque
+// site (un par port), liste, envoi et suppression des fichiers. Écoute sur un
+// socket Unix que seul Caddy peut ouvrir : ni les workers ni les sites publics
+// n'y ont accès.
 import http from "node:http";
 import { createWriteStream } from "node:fs";
 import { chmod, chown, mkdir, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
@@ -8,21 +9,31 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 
-const SITE = process.env.SITE_ROOT;
-const PARENT = path.dirname(SITE);
-const TEMP_PREFIX = `.${path.basename(SITE)}.`;
+const BASE = process.env.SITE_BASE;
+const PARENT = path.dirname(BASE);
+const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
 const SOCKET = "/run/hawebdeployer/admin.sock";
 const MAX_FILE = 25 * 1024 * 1024;
 
+// Site du port 8080 : le dossier des options ; les autres : <dossier>-<port>
+const siteRoot = (port) => (port === 8080 ? BASE : `${BASE}-${port}`);
+const tempPrefix = (port) => `.${path.basename(siteRoot(port))}.`;
+
 // Envois en cours : chaque nouvelle version est préparée à côté du site, puis
 // échangée avec lui d'un coup pour ne jamais servir un site à moitié envoyé
-const deploys = new Map();
+const deploys = new Map(); // id -> { port, dir }
 
 class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
   }
+}
+
+function parsePort(raw) {
+  const port = Number(raw);
+  if (!PORTS.includes(port)) throw new HttpError(404, `Pas de site sur le port ${raw}`);
+  return port;
 }
 
 // Chemin relatif sûr : pas de « .. », pas de fichiers cachés (sauf .well-known)
@@ -83,11 +94,12 @@ async function writeFile(base, rel, req) {
   }
 }
 
-async function deleteFile(rel) {
-  const target = path.join(SITE, rel);
+async function deleteFile(port, rel) {
+  const root = siteRoot(port);
+  const target = path.join(root, rel);
   await rm(target, { force: true, recursive: true });
   // Supprime les dossiers devenus vides, sans remonter au-delà du site
-  for (let dir = path.dirname(target); dir !== SITE && dir.startsWith(SITE); dir = path.dirname(dir)) {
+  for (let dir = path.dirname(target); dir !== root && dir.startsWith(root); dir = path.dirname(dir)) {
     try {
       await rmdir(dir);
     } catch {
@@ -96,39 +108,44 @@ async function deleteFile(rel) {
   }
 }
 
-async function clearSite() {
-  for (const entry of await readdir(SITE).catch(() => [])) {
-    await rm(path.join(SITE, entry), { force: true, recursive: true });
+async function clearSite(port) {
+  const root = siteRoot(port);
+  for (const entry of await readdir(root).catch(() => [])) {
+    await rm(path.join(root, entry), { force: true, recursive: true });
   }
+  // Les sites supplémentaires disparaissent complètement une fois vidés
+  if (port !== 8080) await rmdir(root).catch(() => {});
 }
 
-async function startDeploy() {
+async function startDeploy(port) {
   const id = randomUUID();
-  const dir = path.join(PARENT, `${TEMP_PREFIX}deploy-${id}`);
+  const dir = path.join(PARENT, `${tempPrefix(port)}deploy-${id}`);
   await mkdir(dir, { recursive: true });
-  deploys.set(id, dir);
+  deploys.set(id, { port, dir });
   return id;
 }
 
 async function publishDeploy(id) {
-  const staging = deploys.get(id);
-  const old = path.join(PARENT, `${TEMP_PREFIX}old-${id}`);
-  const hadSite = await rename(SITE, old).then(() => true, (err) => {
+  const { port, dir } = deploys.get(id);
+  const root = siteRoot(port);
+  const old = path.join(PARENT, `${tempPrefix(port)}old-${id}`);
+  const hadSite = await rename(root, old).then(() => true, (err) => {
     if (err.code === "ENOENT") return false;
     throw err;
   });
   try {
-    await rename(staging, SITE);
+    await rename(dir, root);
   } catch (err) {
-    if (hadSite) await rename(old, SITE);
+    if (hadSite) await rename(old, root);
     throw err;
   }
   deploys.delete(id);
   if (hadSite) await rm(old, { force: true, recursive: true });
+  return port;
 }
 
 async function cancelDeploy(id) {
-  await rm(deploys.get(id), { force: true, recursive: true });
+  await rm(deploys.get(id).dir, { force: true, recursive: true });
   deploys.delete(id);
 }
 
@@ -153,51 +170,66 @@ async function tunnelStatus() {
   return { state, hostnames };
 }
 
+async function siteSummary(port) {
+  const files = await listFiles(siteRoot(port));
+  const has = (name) => files.some((f) => f.path === name);
+  return {
+    port,
+    folder: path.relative("/share", siteRoot(port)),
+    files: files.length,
+    size: files.reduce((total, f) => total + f.size, 0),
+    hasIndex: has("index.html"),
+    hasWorker: has("_worker.js"),
+    // Un Cloudflare Worker publié sous son nom d'origine n'est pas exécuté
+    strayWorker: has("worker.js") && !has("_worker.js"),
+  };
+}
+
 async function route(req, url) {
   const p = url.pathname;
   const m = req.method;
 
   if (m === "GET" && p === "/api/status") {
-    const files = await listFiles(SITE);
-    return {
-      folder: process.env.SITE_FOLDER,
-      tunnel: await tunnelStatus(),
-      hasIndex: files.some((f) => f.path === "index.html"),
-      hasWorker: files.some((f) => f.path === "_worker.js"),
-    };
+    return { tunnel: await tunnelStatus(), sites: await Promise.all(PORTS.map(siteSummary)) };
   }
-  if (m === "GET" && p === "/api/files") return { files: await listFiles(SITE) };
-  if (m === "DELETE" && p === "/api/files") {
-    await clearSite();
-    console.log("Site vidé depuis le panneau");
-    return { ok: true };
-  }
-  if (p.startsWith("/api/files/")) {
-    const rel = cleanPath(p.slice("/api/files/".length));
-    if (m === "PUT") {
-      await writeFile(SITE, rel, req);
-      console.log(`Fichier envoyé : ${rel}`);
+
+  const site = p.match(/^\/api\/sites\/(\d+)(\/.*)$/);
+  if (site) {
+    const port = parsePort(site[1]);
+    const rest = site[2];
+    if (m === "GET" && rest === "/files") return { files: await listFiles(siteRoot(port)) };
+    if (m === "DELETE" && rest === "/files") {
+      await clearSite(port);
+      console.log(`Site ${port} vidé depuis le panneau`);
       return { ok: true };
     }
-    if (m === "DELETE") {
-      await deleteFile(rel);
-      console.log(`Fichier supprimé : ${rel}`);
-      return { ok: true };
+    if (m === "POST" && rest === "/deploys") return { id: await startDeploy(port) };
+    if (rest.startsWith("/files/")) {
+      const rel = cleanPath(rest.slice("/files/".length));
+      if (m === "PUT") {
+        await writeFile(siteRoot(port), rel, req);
+        console.log(`Site ${port} : fichier envoyé ${rel}`);
+        return { ok: true };
+      }
+      if (m === "DELETE") {
+        await deleteFile(port, rel);
+        console.log(`Site ${port} : fichier supprimé ${rel}`);
+        return { ok: true };
+      }
     }
   }
 
-  if (m === "POST" && p === "/api/deploys") return { id: await startDeploy() };
   const deploy = p.match(/^\/api\/deploys\/([0-9a-f-]{36})(\/.*)?$/);
   if (deploy && deploys.has(deploy[1])) {
     const [, id, rest = ""] = deploy;
     if (m === "PUT" && rest.startsWith("/files/")) {
-      await writeFile(deploys.get(id), cleanPath(rest.slice("/files/".length)), req);
+      await writeFile(deploys.get(id).dir, cleanPath(rest.slice("/files/".length)), req);
       return { ok: true };
     }
     if (m === "POST" && rest === "/publish") {
-      await publishDeploy(id);
-      const files = await listFiles(SITE);
-      console.log(`Nouvelle version du site publiée : ${files.length} fichier(s)`);
+      const port = await publishDeploy(id);
+      const files = await listFiles(siteRoot(port));
+      console.log(`Site ${port} : nouvelle version publiée (${files.length} fichier(s))`);
       return { ok: true, files: files.length };
     }
     if (m === "DELETE" && rest === "") {
@@ -227,10 +259,13 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Nettoie les envois interrompus par un redémarrage
+const prefixes = PORTS.map(tempPrefix);
 for (const entry of await readdir(PARENT).catch(() => [])) {
-  if (entry.startsWith(TEMP_PREFIX)) await rm(path.join(PARENT, entry), { force: true, recursive: true });
+  if (prefixes.some((prefix) => entry.startsWith(prefix))) {
+    await rm(path.join(PARENT, entry), { force: true, recursive: true });
+  }
 }
-await mkdir(SITE, { recursive: true });
+await mkdir(BASE, { recursive: true });
 await rm(SOCKET, { force: true });
 server.listen(SOCKET, async () => {
   await chown(SOCKET, 0, Number(process.env.CADDY_GID));
