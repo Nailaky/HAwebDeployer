@@ -30,9 +30,17 @@ Il faut Home Assistant OS ou Home Assistant Supervised.
 La configuration (dépôt du site, Cloudflare Tunnel, sécurité) est décrite
 dans [hawebdeployer/DOCS.md](hawebdeployer/DOCS.md).
 
+## Publier une nouvelle version
+
+1. Modifie l'app, puis augmente `version` dans `hawebdeployer/config.yaml`.
+2. Pousse sur `main` : le workflow **Build** construit les images amd64 et
+   aarch64 et les publie sur `ghcr.io/nailaky/{arch}-hawebdeployer`.
+3. Home Assistant propose la mise à jour une fois le workflow terminé.
+
 ## Structure
 
 ```
+.github/workflows/       Construction et publication des images
 repository.yaml          Déclaration du dépôt pour Home Assistant
 hawebdeployer/
 ├── config.yaml          Manifeste de l'app (options, droits, port)

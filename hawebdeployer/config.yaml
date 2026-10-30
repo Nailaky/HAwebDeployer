@@ -1,10 +1,12 @@
 name: HA Web Deployer
-version: "0.1.0"
+version: "0.1.1"
 slug: hawebdeployer
 description: >-
   Héberge un site web statique sur Home Assistant et le publie sur Internet
   via Cloudflare Tunnel, sans ouvrir de port ni exposer Home Assistant.
 url: https://github.com/Nailaky/HAwebDeployer
+# Image construite par GitHub Actions : Home Assistant la télécharge au lieu de la construire
+image: ghcr.io/nailaky/{arch}-hawebdeployer
 arch:
   - aarch64
   - amd64

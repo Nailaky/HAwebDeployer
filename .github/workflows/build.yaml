@@ -1,0 +1,79 @@
+# Construit l'image de l'app pour chaque architecture et la publie sur
+# ghcr.io, pour que Home Assistant n'ait plus qu'à la télécharger.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - hawebdeployer/**
+      - .github/workflows/build.yaml
+  pull_request:
+    paths:
+      - hawebdeployer/**
+      - .github/workflows/build.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lire la version et l'image de base
+        id: info
+        run: |
+          version="$(sed -n 's/^version: "\(.*\)"$/\1/p' hawebdeployer/config.yaml)"
+          build_from="$(sed -n 's/^  ${{ matrix.arch }}: //p' hawebdeployer/build.yaml)"
+          if [[ -z "${version}" || -z "${build_from}" ]]; then
+            echo "Version ou image de base introuvable" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "build_from=${build_from}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.arch }}-hawebdeployer" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Connexion à ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: hawebdeployer
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_FROM=${{ steps.info.outputs.build_from }}
+            BUILD_ARCH=${{ matrix.arch }}
+          labels: |
+            io.hass.name=HA Web Deployer
+            io.hass.type=addon
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.version=${{ steps.info.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          tags: |
+            ${{ steps.info.outputs.image }}:${{ steps.info.outputs.version }}
+            ${{ steps.info.outputs.image }}:latest
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
