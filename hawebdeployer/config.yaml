@@ -1,5 +1,5 @@
 name: HA Web Deployer
-version: "0.1.2"
+version: "0.2.0"
 slug: hawebdeployer
 description: >-
   Héberge un site web statique sur Home Assistant et le publie sur Internet
@@ -13,6 +13,7 @@ arch:
 init: false
 startup: application
 boot: auto
+homeassistant_api: true
 map:
   - type: share
     read_only: true
@@ -25,10 +26,13 @@ ports_description:
   8080/tcp: Accès au site depuis le réseau local (désactivé par défaut)
 options:
   site_folder: www
+  ha_services: []
   content_security_policy: >-
     default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
     frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 schema:
   site_folder: "match(^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$)"
   cloudflare_tunnel_token: password?
+  ha_services:
+    - "match(^[a-z0-9_]+\\.[a-z0-9_]+$)"
   content_security_policy: "match(^[^\"]*$)?"

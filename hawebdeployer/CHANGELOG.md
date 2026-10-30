@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Code côté serveur : un `_worker.js` au format Cloudflare Worker, à la
+  racine du site, reçoit les requêtes qui ne correspondent à aucun fichier.
+  Il est rechargé automatiquement quand il change.
+- Le worker peut appeler les services Home Assistant listés dans la nouvelle
+  option « Services Home Assistant autorisés », via un filtre qui ajoute le
+  jeton lui-même. Le worker ne voit aucun jeton.
+
 ## 0.1.2
 
 - Le bouton « Ouvrir l'interface web » affiche maintenant un aperçu du site

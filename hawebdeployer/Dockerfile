@@ -6,7 +6,8 @@ ARG CLOUDFLARED_VERSION=2026.10.1
 ARG CLOUDFLARED_SHA256_AMD64=3bfc539f45d2620c71debb7a86be0efa737ed5ccbad9eb85c787116900e5c586
 ARG CLOUDFLARED_SHA256_ARM64=2c65dfabf616c40efc7545d107d7a57ad5e21377e2964b7e88af19a238074a46
 
-RUN apk add --no-cache caddy
+RUN apk add --no-cache caddy nodejs \
+    && adduser -S -D -H -s /sbin/nologin worker
 
 # Binaire officiel de cloudflared, vérifié par sa somme SHA-256
 RUN case "${BUILD_ARCH}" in \

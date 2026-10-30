@@ -1,0 +1,20 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Exécute le worker (_worker.js) du site, s'il y en a un
+# ==============================================================================
+
+worker="/share/$(bashio::config 'site_folder')/_worker.js"
+
+if [[ ! -f "${worker}" ]]; then
+    exec sleep infinity
+fi
+
+# Le worker est du code utilisateur : il ne doit lire ni le jeton du Supervisor
+# ni celui du tunnel. Il tourne sous son propre utilisateur, sans ces variables.
+chmod 700 /run/s6/container_environment
+chmod 600 /data/options.json 2>/dev/null || true
+
+bashio::log.info "Démarrage du worker ${worker}..."
+exec s6-setuidgid worker env -i PATH=/usr/bin:/bin HA_URL=http://127.0.0.1:8124 \
+    node /opt/hawebdeployer/runtime.mjs "${worker}"

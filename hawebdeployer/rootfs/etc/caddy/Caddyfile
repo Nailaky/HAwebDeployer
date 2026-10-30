@@ -6,8 +6,8 @@
 	servers {
 		# HTTPS est assuré par Cloudflare, le tunnel parle en HTTP/1.1 en local
 		protocols h1
-		# cloudflared tourne dans le même conteneur : on ne croit que ses en-têtes
-		trusted_proxies static 127.0.0.1/32 ::1/128
+		# Proxys de confiance : cloudflared (même conteneur) et l'Ingress du Supervisor
+		trusted_proxies static 127.0.0.1/32 ::1/128 172.30.32.2/32
 		client_ip_headers Cf-Connecting-IP
 	}
 
@@ -16,12 +16,13 @@
 	}
 }
 
+# Utilisé dans un bloc route : les directives s'exécutent dans cet ordre
 (site) {
 	root * {$SITE_ROOT}
 
-	# Fichiers cachés (.git, .env, ...) : jamais servis
+	# Fichiers cachés (.git, .env, ...) et code du worker : jamais servis
 	@hidden {
-		path */.*
+		path */.* /_worker.js
 		not path /.well-known/*
 	}
 	respond @hidden 404
@@ -33,10 +34,17 @@
 		Cross-Origin-Opener-Policy same-origin
 		-Server
 	}
-
 	encode zstd gzip
-	file_server
 
+	# Fichiers statiques d'abord, puis le worker s'il y en a un
+	file_server {
+		pass_thru
+	}
+	request_header X-Real-IP {client_ip}
+	{$WORKER_HANDLER}
+}
+
+(errors) {
 	handle_errors {
 		respond "{err.status_code} {err.status_text}"
 	}
@@ -44,23 +52,50 @@
 
 # Site public : Cloudflare Tunnel, et le port local s'il est activé
 :8080 {
-	import site
+	route {
+		import site
+	}
 	header {
 		X-Frame-Options DENY
 		Strict-Transport-Security "max-age=31536000"
 	}
 	{$CSP_HEADER}
+	import errors
 }
 
 # Aperçu dans Home Assistant (Ingress) : affiché dans un cadre de l'interface HA
 :8099 {
-	# Seul le proxy Ingress du Supervisor a le droit de se connecter
-	@outside not remote_ip 172.30.32.2
-	respond @outside 403 {
-		close
+	route {
+		# Seul le proxy Ingress du Supervisor a le droit de se connecter
+		@outside not remote_ip 172.30.32.2
+		respond @outside 403 {
+			close
+		}
+		import site
 	}
-
-	import site
 	header X-Frame-Options SAMEORIGIN
 	{$CSP_HEADER_INGRESS}
+	import errors
+}
+
+# Accès à Home Assistant pour le worker : seuls les services autorisés dans les
+# options passent, et le jeton du Supervisor est ajouté ici, jamais par le worker
+:8124 {
+	bind 127.0.0.1
+
+	@allowed {
+		method POST
+		path {$HA_SERVICE_PATHS}
+	}
+	handle @allowed {
+		request_body {
+			max_size 64KB
+		}
+		rewrite * /core{uri}
+		reverse_proxy http://supervisor {
+			header_up Host supervisor
+			header_up Authorization "Bearer {env.SUPERVISOR_TOKEN}"
+		}
+	}
+	respond 403
 }

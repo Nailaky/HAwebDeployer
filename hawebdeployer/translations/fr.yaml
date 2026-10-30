@@ -9,6 +9,11 @@ configuration:
     description: >-
       Jeton du tunnel créé dans Cloudflare Zero Trust. Laisser vide pour ne
       pas publier le site sur Internet.
+  ha_services:
+    name: Services Home Assistant autorisés
+    description: >-
+      Services que le worker (_worker.js) peut appeler, par exemple
+      script.garage_ouvrir. Tout autre accès à Home Assistant est refusé.
   content_security_policy:
     name: Content-Security-Policy
     description: >-

@@ -1,20 +1,23 @@
 #!/command/with-contenv bashio
 # shellcheck shell=bash
 # ==============================================================================
-# Démarre Caddy, qui sert le site statique sur le port 8080
+# Démarre Caddy, qui sert le site sur le port 8080 (public) et 8099 (Ingress)
 # ==============================================================================
 
 site_folder="$(bashio::config 'site_folder')"
 site_root="/share/${site_folder}"
 
-if [[ ! -f "${site_root}/index.html" ]]; then
-    bashio::log.warning "Aucun index.html trouvé dans ${site_root}."
+export WORKER_HANDLER="error 404"
+if [[ -f "${site_root}/_worker.js" ]]; then
+    WORKER_HANDLER="reverse_proxy 127.0.0.1:8787"
+elif [[ ! -f "${site_root}/index.html" ]]; then
+    bashio::log.warning "Aucun index.html ni _worker.js trouvé dans ${site_root}."
     bashio::log.warning "Dépose ton site dans le dossier « share/${site_folder} » puis redémarre l'app."
     bashio::log.warning "En attendant, une page d'attente est servie."
     site_root="/var/www/placeholder"
 fi
-
 export SITE_ROOT="${site_root}"
+
 export CSP_HEADER=""
 export CSP_HEADER_INGRESS=""
 if bashio::config.has_value 'content_security_policy'; then
@@ -24,6 +27,14 @@ if bashio::config.has_value 'content_security_policy'; then
     csp_ingress="$(sed -E "s/frame-ancestors[^;]*/frame-ancestors 'self'/" <<< "${csp}")"
     CSP_HEADER_INGRESS="header Content-Security-Policy \"${csp_ingress}\""
 fi
+
+# Services Home Assistant que le worker peut appeler (script.x -> /api/services/script/x)
+paths=()
+for service in $(bashio::config 'ha_services'); do
+    paths+=("/api/services/${service/./\/}")
+    bashio::log.info "Service Home Assistant autorisé pour le worker : ${service}"
+done
+export HA_SERVICE_PATHS="${paths[*]:-/aucun-service-autorise}"
 
 bashio::log.info "Démarrage de Caddy (site : ${SITE_ROOT})..."
 export HOME=/var/lib/caddy
