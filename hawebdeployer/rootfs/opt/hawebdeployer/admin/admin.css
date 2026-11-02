@@ -157,7 +157,59 @@ a { color: var(--accent); }
 
 .empty { margin: 0; color: var(--muted); }
 
+.muted { color: var(--muted); font-size: 13px; }
+
+dialog {
+	width: min(960px, calc(100% - 32px));
+	max-height: calc(100vh - 32px);
+	overflow: hidden;
+	padding: 16px 20px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--card);
+	color: var(--text);
+}
+/* Seul le code défile, pas la fenêtre */
+dialog[open] { display: flex; flex-direction: column; }
+dialog::backdrop { background: rgb(0 0 0 / .5); }
+
+.viewer-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 12px;
+}
+.viewer-head h3 { word-break: break-all; }
+.viewer-actions { display: flex; gap: 16px; white-space: nowrap; }
+
+.viewer-body { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.viewer-body img { align-self: flex-start; max-width: 100%; height: auto; }
+.viewer-body p { margin: 0; color: var(--muted); }
+
+.code {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	min-height: 0;
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--bg);
+	font: 13px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.code pre { margin: 0; padding: 8px 12px; font: inherit; }
+.code .gutter {
+	position: sticky;
+	left: 0;
+	color: var(--muted);
+	text-align: right;
+	background: var(--bg);
+	border-right: 1px solid var(--border);
+	user-select: none;
+}
+
 table { width: 100%; border-collapse: collapse; }
+td.path .link { font-size: inherit; text-align: left; word-break: break-all; }
 td { padding: 6px 0; border-top: 1px solid var(--border); vertical-align: middle; }
 td.path { word-break: break-all; }
 td.size { width: 80px; color: var(--muted); font-size: 13px; text-align: right; padding-right: 16px; }

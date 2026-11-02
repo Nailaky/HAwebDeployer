@@ -58,6 +58,21 @@
 			</table>
 		</section>
 	</main>
+
+	<dialog id="viewer" aria-labelledby="viewer-title">
+		<div class="viewer-head">
+			<div>
+				<h3 id="viewer-title"></h3>
+				<span id="viewer-size" class="muted"></span>
+			</div>
+			<div class="viewer-actions">
+				<a id="viewer-open" class="link" target="_blank" rel="noopener">Ouvrir dans l'aperçu ↗</a>
+				<button id="viewer-close" class="link" type="button">Fermer</button>
+			</div>
+		</div>
+		<div id="viewer-body" class="viewer-body"></div>
+	</dialog>
+
 	<script src="admin.js"></script>
 </body>
 </html>

@@ -33,7 +33,10 @@ C'est en ligne immédiatement, sans redémarrage :
   disparaît alors des onglets.
 
 Pour chaque site, le panneau liste les fichiers en ligne, donne ses adresses
-(réseau local et Internet) et un lien vers son aperçu.
+(réseau local et Internet) et un lien vers son aperçu. Clique sur un fichier
+pour voir son code, avec les numéros de ligne : c'est ce qui est réellement
+publié, `_worker.js` compris. Les images s'affichent ; les fichiers binaires
+et ceux de plus de 1 Mo ne sont pas affichés.
 
 Les fichiers sont stockés dans `share/www` (port 8080) et `share/www-8081`,
 `share/www-8082`... pour les autres ports. Tu peux aussi les modifier avec

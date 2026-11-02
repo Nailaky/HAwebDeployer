@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Visionneuse de code dans le panneau : un clic sur un fichier en ligne
+  affiche son contenu avec les numéros de ligne (y compris `_worker.js`).
+  Les images s'affichent, les fichiers binaires ou de plus de 1 Mo sont
+  signalés.
+
 ## 0.4.0
 
 - Plusieurs sites : jusqu'à 10, un par port (8080 à 8089), chacun avec son

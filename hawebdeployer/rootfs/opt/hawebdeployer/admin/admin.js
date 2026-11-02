@@ -123,10 +123,12 @@ function renderSite() {
 async function refreshFiles() {
 	const { files } = await apiJson(`sites/${current}/files`);
 	const rows = files.map((file) => {
+		const name = element("button", { type: "button", className: "link", textContent: file.path, title: "Voir le contenu" });
+		name.addEventListener("click", () => viewFile(file.path));
 		const remove = element("button", { type: "button", className: "link danger", textContent: "Supprimer" });
 		remove.addEventListener("click", () => removeFile(file.path));
 		return element("tr", {},
-			element("td", { className: "path", textContent: file.path }),
+			element("td", { className: "path" }, name),
 			element("td", { className: "size", textContent: formatSize(file.size) }),
 			element("td", { className: "actions" }, remove));
 	});
@@ -201,6 +203,47 @@ async function publish(items, replace) {
 		dropzone.classList.remove("busy");
 		refresh();
 	}
+}
+
+// Visionneuse : affiche le code d'un fichier publié, avec ses numéros de ligne
+const viewer = $("#viewer");
+$("#viewer-close").addEventListener("click", () => viewer.close());
+viewer.addEventListener("click", (event) => {
+	if (event.target === viewer) viewer.close(); // clic hors de la fenêtre
+});
+
+async function viewFile(path) {
+	let file;
+	try {
+		file = await apiJson(`sites/${current}/files/${encodePath(path)}`);
+	} catch (err) {
+		say(err.message, "error");
+		return;
+	}
+
+	$("#viewer-title").textContent = path;
+	$("#viewer-size").textContent = formatSize(file.size);
+	// _worker.js n'est jamais servi aux visiteurs : rien à ouvrir dans l'aperçu
+	const open = $("#viewer-open");
+	open.hidden = path === "_worker.js";
+	open.href = `apercu/${current}/${encodePath(path)}`;
+
+	let body;
+	if (file.kind === "texte") {
+		const count = file.content.replace(/\n$/, "").split("\n").length;
+		const gutter = element("pre", { className: "gutter", textContent: Array.from({ length: count }, (_, i) => i + 1).join("\n") });
+		gutter.setAttribute("aria-hidden", "true");
+		body = element("div", { className: "code" }, gutter, element("pre", { textContent: file.content }));
+	} else if (file.kind === "image") {
+		body = element("img", { src: open.href, alt: path });
+	} else {
+		body = element("p", {
+			textContent: file.kind === "binaire" ? "Fichier binaire : son contenu ne peut pas être affiché."
+				: "Fichier trop volumineux pour être affiché (plus de 1 Mo).",
+		});
+	}
+	$("#viewer-body").replaceChildren(body);
+	viewer.showModal();
 }
 
 async function removeFile(path) {

@@ -4,7 +4,7 @@
 // n'y ont accès.
 import http from "node:http";
 import { createWriteStream } from "node:fs";
-import { chmod, chown, mkdir, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
+import { chmod, chown, mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
@@ -14,6 +14,8 @@ const PARENT = path.dirname(BASE);
 const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
 const SOCKET = "/run/hawebdeployer/admin.sock";
 const MAX_FILE = 25 * 1024 * 1024;
+const MAX_VIEW = 1024 * 1024;
+const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i;
 
 // Site du port 8080 : le dossier des options ; les autres : <dossier>-<port>
 const siteRoot = (port) => (port === 8080 ? BASE : `${BASE}-${port}`);
@@ -92,6 +94,21 @@ async function writeFile(base, rel, req) {
     await rm(tmp, { force: true });
     throw err instanceof HttpError ? err : new HttpError(409, `Impossible d'écrire ${rel}`);
   }
+}
+
+// Contenu d'un fichier pour la visionneuse : texte seulement, les images sont
+// affichées par l'aperçu du site
+async function viewFile(port, rel) {
+  const full = path.join(siteRoot(port), rel);
+  const info = await stat(full).catch(() => null);
+  if (!info?.isFile()) throw new HttpError(404, `${rel} introuvable`);
+
+  const file = { path: rel, size: info.size };
+  if (IMAGE.test(rel)) return { ...file, kind: "image" };
+  if (info.size > MAX_VIEW) return { ...file, kind: "trop-gros" };
+  const data = await readFile(full);
+  if (data.subarray(0, 8000).includes(0)) return { ...file, kind: "binaire" };
+  return { ...file, kind: "texte", content: data.toString("utf8") };
 }
 
 async function deleteFile(port, rel) {
@@ -206,6 +223,7 @@ async function route(req, url) {
     if (m === "POST" && rest === "/deploys") return { id: await startDeploy(port) };
     if (rest.startsWith("/files/")) {
       const rel = cleanPath(rest.slice("/files/".length));
+      if (m === "GET") return viewFile(port, rel);
       if (m === "PUT") {
         await writeFile(siteRoot(port), rel, req);
         console.log(`Site ${port} : fichier envoyé ${rel}`);
