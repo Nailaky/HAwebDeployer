@@ -106,6 +106,15 @@
 	handle_path /apercu/{args[0]}/* {
 		{$CSP_HEADER_INGRESS}
 		route {
+			# Dossier demandé sans « / » final : redirection dans l'aperçu (avec le
+			# préfixe de l'Ingress), et non vers la racine de Home Assistant
+			root * {args[1]}
+			@dir{args[0]} {
+				not path */
+				file {path}/index.html
+			}
+			redir @dir{args[0]} {header.X-Ingress-Path}/apercu/{args[0]}{path}/ 308
+
 			import site {args[1]} {args[0]}
 		}
 	}

@@ -172,10 +172,14 @@ workers ne sont pas concernées.
 ### Aperçu dans Home Assistant
 
 Le lien **Voir l'aperçu** du panneau affiche le site à travers
-Home Assistant. Les liens absolus (`/style.css`), courants dans les sites
-générés, n'y fonctionnent pas : styles, images et liens peuvent manquer. Le
-panneau le signale ; ouvre alors le site par son adresse sur le réseau local
-ou sur Internet, qui ne sont pas concernées.
+Home Assistant, même depuis l'extérieur. Les liens absolus (`/style.css`),
+courants dans les sites générés, y fonctionnent grâce à un service worker que
+le panneau installe : ouvre le panneau au moins une fois avant l'aperçu.
+
+Ce service worker n'existe qu'en HTTPS : si Home Assistant est ouvert en HTTP
+(par exemple `http://192.168.1.20:8123`), styles, images et liens d'un site à
+liens absolus peuvent manquer dans l'aperçu. Le panneau le signale ; ouvre
+alors le site par son adresse sur le réseau local ou sur Internet.
 
 ## 6. Dépannage
 

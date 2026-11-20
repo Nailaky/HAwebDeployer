@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+- Aperçu fidèle des sites à liens absolus (Astro, Vite...) : le panneau
+  installe un service worker qui ramène dans l'aperçu les adresses comme
+  `/_astro/style.css` et réécrit les liens des pages. Styles, images,
+  polices, vidéos et navigation fonctionnent dans l'aperçu. Nécessite
+  Home Assistant en HTTPS.
+- Un dossier demandé sans « / » final est redirigé dans l'aperçu, et non
+  plus vers la racine de Home Assistant.
+
 ## 0.6.2
 
 - Les fichiers de plus de 16 Mo (vidéos) échouaient avec « Erreur 413 » :

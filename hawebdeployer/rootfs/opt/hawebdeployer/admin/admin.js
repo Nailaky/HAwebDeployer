@@ -5,6 +5,11 @@ const dropzone = $("#dropzone");
 const message = $("#message");
 
 const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
+
+// Aperçu fidèle des sites à liens absolus : voir apercu-sw.js. Un service
+// worker n'existe qu'en HTTPS (ou sur localhost).
+const previewWorker = "serviceWorker" in navigator && isSecureContext;
+if (previewWorker) navigator.serviceWorker.register("apercu-sw.js", { scope: "apercu/" }).catch(() => {});
 let status = { tunnel: { state: "desactive", hostnames: [] }, sites: [] };
 let current = PORTS.includes(Number(location.hash.slice(1))) ? Number(location.hash.slice(1)) : 8080;
 const created = new Set([current]); // nouveaux sites encore vides, affichés quand même
@@ -133,10 +138,12 @@ function renderSite() {
 	}
 	$("#links").replaceChildren(...links);
 
+	// Sans service worker (Home Assistant ouvert en HTTP), l'aperçu ne corrige pas les liens absolus
 	const previewHint = $("#preview-hint");
-	previewHint.hidden = !site?.absoluteLinks;
+	previewHint.hidden = !site?.absoluteLinks || previewWorker;
 	previewHint.textContent = "Ce site utilise des liens absolus (/style.css…) : dans l'aperçu, ses styles, images "
-		+ "et liens peuvent manquer. Ouvre plutôt son adresse sur le réseau local ou sur Internet, qui ne sont pas concernées.";
+		+ "et liens peuvent manquer, car Home Assistant est ouvert en HTTP. Ouvre-le en HTTPS, ou ouvre le site "
+		+ "par son adresse sur le réseau local ou sur Internet.";
 
 	const hint = $("#port-hint");
 	hint.hidden = current === 8080;
