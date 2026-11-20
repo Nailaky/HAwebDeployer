@@ -30,6 +30,20 @@ const isIgnored = (p) => p.split("/").some((part) =>
 // Dossiers où les outils (Astro, Vite, Hugo...) génèrent le site prêt à publier
 const BUILD_DIRS = ["dist", "build", "out", "_site", "public"];
 const UPLOADS_IN_PARALLEL = 4;
+// L'Ingress de Home Assistant refuse les requêtes de plus de 16 Mo
+const CHUNK_SIZE = 8 * 1024 * 1024;
+
+// Envoie un fichier, en morceaux s'il est gros (l'API les remet bout à bout)
+async function uploadFile(url, file) {
+	if (file.size <= CHUNK_SIZE) return apiJson(url, { method: "PUT", body: file });
+	for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
+		const end = Math.min(offset + CHUNK_SIZE, file.size);
+		await apiJson(`${url}?offset=${offset}&final=${end === file.size ? 1 : 0}`, {
+			method: "PUT",
+			body: file.slice(offset, end),
+		});
+	}
+}
 const servicePort = (service) => Number(service?.match(/^https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)\/?$/)?.[1]);
 
 function formatSize(bytes) {
@@ -216,7 +230,7 @@ async function publish(items, replace) {
 			while (queue.length) {
 				const { path, file } = queue.shift();
 				try {
-					await apiJson(base + encodePath(path), { method: "PUT", body: file });
+					await uploadFile(base + encodePath(path), file);
 				} catch (err) {
 					queue.length = 0;
 					throw new Error(`${path} : ${err.message}`);

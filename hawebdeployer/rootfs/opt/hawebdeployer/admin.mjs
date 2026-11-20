@@ -6,7 +6,7 @@ import http from "node:http";
 import { createWriteStream } from "node:fs";
 import { chmod, chown, mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 
 const BASE = process.env.SITE_BASE;
@@ -76,8 +76,14 @@ async function listFiles(dir, prefix = "") {
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-async function writeFile(base, rel, req) {
-  if (Number(req.headers["content-length"]) > MAX_FILE) {
+// L'Ingress de Home Assistant refuse les requêtes de plus de 16 Mo : le panneau
+// envoie les gros fichiers en morceaux (?offset=…&final=0), ajoutés à un même
+// fichier temporaire qui prend la place du fichier au dernier morceau.
+async function writeFile(base, rel, req, url) {
+  const offset = Number(url.searchParams.get("offset") ?? 0);
+  const final = url.searchParams.get("final") !== "0";
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, `Position invalide pour ${rel}`);
+  if (offset + Number(req.headers["content-length"] ?? 0) > MAX_FILE) {
     throw new HttpError(413, `${rel} dépasse ${MAX_FILE / 1024 / 1024} Mo`);
   }
   const dest = path.join(base, rel);
@@ -87,15 +93,18 @@ async function writeFile(base, rel, req) {
     throw new HttpError(409, `Impossible de créer le dossier de ${rel}`);
   }
 
-  const tmp = path.join(path.dirname(dest), `.upload-${randomUUID()}`);
-  let size = 0;
+  const tmp = path.join(path.dirname(dest), `.upload-${createHash("sha256").update(rel).digest("hex").slice(0, 16)}`);
+  if (offset > 0 && (await stat(tmp).catch(() => null))?.size !== offset) {
+    throw new HttpError(409, `Envoi de ${rel} interrompu : recommence la publication`);
+  }
+  let size = offset;
   req.on("data", (chunk) => {
     size += chunk.length;
     if (size > MAX_FILE) req.destroy(new HttpError(413, `${rel} dépasse ${MAX_FILE / 1024 / 1024} Mo`));
   });
   try {
-    await pipeline(req, createWriteStream(tmp, { mode: 0o644 }));
-    await rename(tmp, dest);
+    await pipeline(req, createWriteStream(tmp, { flags: offset === 0 ? "w" : "a", mode: 0o644 }));
+    if (final) await rename(tmp, dest);
   } catch (err) {
     await rm(tmp, { force: true });
     throw err instanceof HttpError ? err : new HttpError(409, `Impossible d'écrire ${rel}`);
@@ -236,7 +245,7 @@ async function route(req, url) {
       const rel = cleanPath(rest.slice("/files/".length));
       if (m === "GET") return viewFile(port, rel);
       if (m === "PUT") {
-        await writeFile(siteRoot(port), rel, req);
+        await writeFile(siteRoot(port), rel, req, url);
         console.log(`Site ${port} : fichier envoyé ${rel}`);
         return { ok: true };
       }
@@ -252,7 +261,7 @@ async function route(req, url) {
   if (deploy && deploys.has(deploy[1])) {
     const [, id, rest = ""] = deploy;
     if (m === "PUT" && rest.startsWith("/files/")) {
-      await writeFile(deploys.get(id).dir, cleanPath(rest.slice("/files/".length)), req);
+      await writeFile(deploys.get(id).dir, cleanPath(rest.slice("/files/".length)), req, url);
       return { ok: true };
     }
     if (m === "POST" && rest === "/publish") {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- Les fichiers de plus de 16 Mo (vidéos) échouaient avec « Erreur 413 » :
+  l'Ingress de Home Assistant refuse les requêtes plus grosses. Le panneau
+  les envoie maintenant en morceaux de 8 Mo, remis bout à bout par l'app.
+
 ## 0.6.1
 
 - **Correction critique.** Au démarrage, les services lisaient les options en

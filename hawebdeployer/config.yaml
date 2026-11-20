@@ -1,5 +1,5 @@
 name: HA Web Deployer
-version: "0.6.1"
+version: "0.6.2"
 slug: hawebdeployer
 description: >-
   Héberge un site web statique sur Home Assistant et le publie sur Internet
