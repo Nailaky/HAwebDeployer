@@ -22,4 +22,4 @@ RUN case "${BUILD_ARCH}" in \
 
 COPY rootfs /
 
-RUN chmod a+x /etc/s6-overlay/s6-rc.d/*/run /etc/s6-overlay/s6-rc.d/*/finish
+RUN chmod a+x /etc/s6-overlay/s6-rc.d/*/run /etc/s6-overlay/s6-rc.d/*/finish /etc/s6-overlay/scripts/*.sh

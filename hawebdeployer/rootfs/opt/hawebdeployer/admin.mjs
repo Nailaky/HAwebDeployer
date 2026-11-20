@@ -10,6 +10,12 @@ import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 
 const BASE = process.env.SITE_BASE;
+// Garde-fou : un sous-dossier de /share, jamais /share lui-même. « Tout
+// supprimer » vide le dossier d'un site : avec /share, il viderait tout /share.
+if (!/^\/share\/[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(BASE ?? "")) {
+  console.error(`Dossier des sites invalide : « ${BASE} ». Arrêt pour ne rien modifier dans /share.`);
+  process.exit(1);
+}
 const PARENT = path.dirname(BASE);
 const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
 const SOCKET = "/run/hawebdeployer/admin.sock";

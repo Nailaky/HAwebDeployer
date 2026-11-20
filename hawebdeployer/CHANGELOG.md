@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.1
+
+- **Correction critique.** Au démarrage, les services lisaient les options en
+  même temps et pouvaient recevoir un « Dossier des sites » vide. Le site du
+  port 8080 devenait alors `/share` lui-même : le panneau listait tout
+  `/share`, et « Tout supprimer » sur ce site vidait tout `/share` (fichiers
+  des autres apps compris). Les options sont maintenant lues une seule fois,
+  avant tous les services, et l'app refuse de démarrer si le dossier des
+  sites n'est pas un sous-dossier de `/share`. Si tu as utilisé « Tout
+  supprimer » avec une version précédente, vérifie le contenu de `/share` et
+  restaure-le depuis une sauvegarde si besoin.
+
 ## 0.6.0
 
 - Sites générés (Astro, Vite, Hugo...) : glisser le dossier du projet propose

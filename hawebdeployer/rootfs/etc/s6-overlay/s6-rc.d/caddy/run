@@ -4,7 +4,11 @@
 # Démarre Caddy : un site par port (8080 à 8089) et le panneau (Ingress, 8099)
 # ==============================================================================
 
-site_base="/share/$(bashio::config 'site_folder')"
+# Validé par init-options ; revérifié pour ne jamais publier tout /share
+site_base="${SITE_BASE:-}"
+if [[ ! "${site_base}" =~ ^/share/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$ ]]; then
+    bashio::exit.nok "Dossier des sites invalide : « ${site_base} »."
+fi
 
 # Un site par port : 8080 utilise le dossier du site, les autres <dossier>-<port>
 mkdir -p /run/caddy

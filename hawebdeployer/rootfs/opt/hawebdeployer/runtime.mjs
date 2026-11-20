@@ -7,6 +7,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const BASE = process.env.SITE_BASE;
+if (!/^\/share\/[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(BASE ?? "")) {
+  console.error(`Dossier des sites invalide : « ${BASE} »`);
+  process.exit(1);
+}
 const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
 const PORT = 8787;
 const MAX_BODY = 64 * 1024;
