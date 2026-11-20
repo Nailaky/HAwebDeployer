@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- Sites générés (Astro, Vite, Hugo...) : glisser le dossier du projet propose
+  de ne publier que son dossier de build (`dist`...) ; `node_modules` est
+  ignoré.
+- Limite par fichier portée de 25 à 200 Mo (vidéos).
+- Envoi de 4 fichiers à la fois, avec la progression en Mo.
+- La page `404.html` d'un site est affichée pour les adresses introuvables.
+- La Content-Security-Policy par défaut autorise les scripts intégrés aux
+  pages ; l'ancienne valeur par défaut est remplacée automatiquement.
+- Le panneau signale qu'un site à liens absolus s'affiche mal dans l'aperçu.
+
 ## 0.5.0
 
 - Visionneuse de code dans le panneau : un clic sur un fichier en ligne

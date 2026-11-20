@@ -1,5 +1,5 @@
 name: HA Web Deployer
-version: "0.5.0"
+version: "0.6.0"
 slug: hawebdeployer
 description: >-
   Héberge un site web statique sur Home Assistant et le publie sur Internet
@@ -48,7 +48,8 @@ options:
   ha_services: []
   worker_variables: []
   content_security_policy: >-
-    default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
+    default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
+    img-src 'self' data:; font-src 'self' data:; object-src 'none';
     frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 schema:
   site_folder: "match(^[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$)"

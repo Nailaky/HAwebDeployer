@@ -23,6 +23,14 @@ export CSP_HEADER=""
 export CSP_HEADER_INGRESS=""
 if bashio::config.has_value 'content_security_policy'; then
     csp="$(bashio::config 'content_security_policy')"
+    # Ancienne valeur par défaut (avant 0.6.0) : elle bloquait les scripts
+    # intégrés aux pages, présents dans la plupart des sites (Astro, Hugo...).
+    # Remplacée par la nouvelle valeur par défaut de config.yaml.
+    old_default="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    if [[ "${csp}" == "${old_default}" ]]; then
+        csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        bashio::log.info "Content-Security-Policy : nouvelle valeur par défaut, qui autorise les scripts intégrés aux pages."
+    fi
     CSP_HEADER="header ?Content-Security-Policy \"${csp}\""
     # L'aperçu est affiché dans un cadre de Home Assistant : on l'y autorise
     csp_ingress="$(sed -E "s/frame-ancestors[^;]*/frame-ancestors 'self'/" <<< "${csp}")"

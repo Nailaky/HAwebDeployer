@@ -50,6 +50,10 @@
 	file_server {
 		pass_thru
 	}
+	# Pas de worker : erreur 404 (avec la page 404.html du site s'il en a une)
+	@noworker{args[1]} not file /_worker.js
+	error @noworker{args[1]} 404
+
 	# Le worker sait de quel site vient la requête (en-tête imposé par Caddy)
 	request_header X-Site {args[1]}
 	request_header X-Real-IP {client_ip}
@@ -59,6 +63,26 @@
 (errors) {
 	handle_errors {
 		respond "{err.status_code} {err.status_text}"
+	}
+}
+
+# Erreurs d'un site : sa page 404.html pour les pages introuvables. Argument : dossier
+(site_errors) {
+	handle_errors {
+		root * {args[0]}
+		@page404 {
+			expression {err.status_code} == 404
+			file /404.html
+		}
+		handle @page404 {
+			rewrite * /404.html
+			file_server {
+				status 404
+			}
+		}
+		handle {
+			respond "{err.status_code} {err.status_text}"
+		}
 	}
 }
 
@@ -73,7 +97,7 @@
 			Strict-Transport-Security "max-age=31536000"
 		}
 		{$CSP_HEADER}
-		import errors
+		import site_errors {args[1]}
 	}
 }
 

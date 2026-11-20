@@ -24,7 +24,12 @@ async function apiJson(path, options) {
 }
 
 const encodePath = (p) => p.split("/").map(encodeURIComponent).join("/");
-const isHidden = (p) => p.split("/").some((part) => part.startsWith(".") && part !== ".well-known");
+// Jamais publiés : fichiers cachés (.git, .env...) et dépendances (node_modules)
+const isIgnored = (p) => p.split("/").some((part) =>
+	part === "node_modules" || (part.startsWith(".") && part !== ".well-known"));
+// Dossiers où les outils (Astro, Vite, Hugo...) génèrent le site prêt à publier
+const BUILD_DIRS = ["dist", "build", "out", "_site", "public"];
+const UPLOADS_IN_PARALLEL = 4;
 const servicePort = (service) => Number(service?.match(/^https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)\/?$/)?.[1]);
 
 function formatSize(bytes) {
@@ -114,6 +119,11 @@ function renderSite() {
 	}
 	$("#links").replaceChildren(...links);
 
+	const previewHint = $("#preview-hint");
+	previewHint.hidden = !site?.absoluteLinks;
+	previewHint.textContent = "Ce site utilise des liens absolus (/style.css…) : dans l'aperçu, ses styles, images "
+		+ "et liens peuvent manquer. Ouvre plutôt son adresse sur le réseau local ou sur Internet, qui ne sont pas concernées.";
+
 	const hint = $("#port-hint");
 	hint.hidden = current === 8080;
 	hint.textContent = `Sur le réseau local, ce site n'est visible que si le port ${current} est activé dans l'onglet Réseau de l'app. `
@@ -160,6 +170,16 @@ function select(port) {
 async function publish(items, replace) {
 	const port = current;
 
+	// Code source d'un site (Astro, Vite...) : seul son dossier de build se publie
+	if (replace && !items.some((i) => i.path === "index.html" || i.path === "_worker.js")) {
+		const build = BUILD_DIRS.find((dir) => items.some((i) => i.path === `${dir}/index.html`));
+		if (build && confirm(`Ce dossier ressemble au code source d'un site : le site prêt à publier est dans « ${build} ». Publier uniquement « ${build} » ?`)) {
+			items = items
+				.filter((i) => i.path.startsWith(`${build}/`))
+				.map((i) => ({ path: i.path.slice(build.length + 1), file: i.file }));
+		}
+	}
+
 	// Un Cloudflare Worker gardé sous son nom d'origine ne serait pas exécuté
 	const plain = items.find((item) => item.path === "worker.js");
 	if (plain && !items.some((item) => item.path === "_worker.js")
@@ -168,7 +188,7 @@ async function publish(items, replace) {
 		plain.path = "_worker.js";
 	}
 
-	const kept = items.filter((item) => !isHidden(item.path));
+	const kept = items.filter((item) => !isIgnored(item.path));
 	const skipped = items.length - kept.length;
 	if (kept.length === 0) {
 		say("Aucun fichier à envoyer.", "error");
@@ -187,13 +207,29 @@ async function publish(items, replace) {
 			deployId = (await apiJson(`sites/${port}/deploys`, { method: "POST" })).id;
 			base = `deploys/${deployId}/files/`;
 		}
-		for (const [index, { path, file }] of kept.entries()) {
-			say(`Envoi ${index + 1}/${kept.length} : ${path}`);
-			await apiJson(base + encodePath(path), { method: "PUT", body: file });
-		}
+		// Plusieurs envois à la fois : un site généré compte souvent des centaines de fichiers
+		const queue = [...kept];
+		const totalBytes = kept.reduce((sum, { file }) => sum + file.size, 0);
+		let sent = 0;
+		let sentBytes = 0;
+		const uploader = async () => {
+			while (queue.length) {
+				const { path, file } = queue.shift();
+				try {
+					await apiJson(base + encodePath(path), { method: "PUT", body: file });
+				} catch (err) {
+					queue.length = 0;
+					throw new Error(`${path} : ${err.message}`);
+				}
+				sent += 1;
+				sentBytes += file.size;
+				say(`Envoi ${sent}/${kept.length} (${formatSize(sentBytes)} sur ${formatSize(totalBytes)})`);
+			}
+		};
+		await Promise.all(Array.from({ length: UPLOADS_IN_PARALLEL }, uploader));
 		if (deployId) await apiJson(`deploys/${deployId}/publish`, { method: "POST" });
 
-		const ignored = skipped ? ` (${skipped} fichier(s) caché(s) ignoré(s))` : "";
+		const ignored = skipped ? ` (${skipped} fichier(s) caché(s) ou node_modules ignoré(s))` : "";
 		say(replace ? `Site publié sur le port ${port} : ${kept.length} fichier(s)${ignored}.`
 			: `${kept.length} fichier(s) ajouté(s)${ignored}.`, "ok");
 	} catch (err) {
@@ -284,6 +320,8 @@ async function collect(entry, prefix) {
 		const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
 		return [{ path: prefix + entry.name, file }];
 	}
+	// Inutile de parcourir ce qui ne sera pas publié (node_modules peut être énorme)
+	if (isIgnored(entry.name)) return [];
 	const reader = entry.createReader();
 	const children = [];
 	for (let batch = await readEntries(reader); batch.length; batch = await readEntries(reader)) {

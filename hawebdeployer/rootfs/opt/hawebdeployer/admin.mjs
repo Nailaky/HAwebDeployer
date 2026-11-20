@@ -13,7 +13,7 @@ const BASE = process.env.SITE_BASE;
 const PARENT = path.dirname(BASE);
 const PORTS = Array.from({ length: 10 }, (_, i) => 8080 + i);
 const SOCKET = "/run/hawebdeployer/admin.sock";
-const MAX_FILE = 25 * 1024 * 1024;
+const MAX_FILE = 200 * 1024 * 1024;
 const MAX_VIEW = 1024 * 1024;
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i;
 
@@ -190,6 +190,10 @@ async function tunnelStatus() {
 async function siteSummary(port) {
   const files = await listFiles(siteRoot(port));
   const has = (name) => files.some((f) => f.path === name);
+  // Liens absolus (/style.css) : corrects sur le site, mais pas dans l'aperçu
+  const index = has("index.html")
+    ? await readFile(path.join(siteRoot(port), "index.html"), "utf8").catch(() => "")
+    : "";
   return {
     port,
     folder: path.relative("/share", siteRoot(port)),
@@ -199,6 +203,7 @@ async function siteSummary(port) {
     hasWorker: has("_worker.js"),
     // Un Cloudflare Worker publié sous son nom d'origine n'est pas exécuté
     strayWorker: has("worker.js") && !has("_worker.js"),
+    absoluteLinks: /\s(?:href|src)=["']?\/(?!\/)/.test(index),
   };
 }
 

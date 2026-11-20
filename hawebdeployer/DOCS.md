@@ -27,8 +27,15 @@ C'est en ligne immédiatement, sans redémarrage :
   l'ancienne version jusqu'à ce que la nouvelle soit entièrement envoyée.
 - **Des fichiers seuls** (bouton **Ajouter des fichiers**) sont ajoutés ou
   remplacent ceux du même nom.
-- Les fichiers et dossiers cachés (`.git`, `.env`, `.DS_Store`...) sont
-  ignorés.
+- Les fichiers et dossiers cachés (`.git`, `.env`, `.DS_Store`...) et
+  `node_modules` sont ignorés.
+- **Le code source d'un site** (Astro, Vite, Hugo...) peut être glissé tel
+  quel : si son dossier `dist`, `build`, `out`, `_site` ou `public` contient
+  un `index.html`, le panneau propose de ne publier que ce dossier.
+- Taille maximale : 200 Mo par fichier. Les vidéos sont servies par morceaux
+  (lecture et avance rapide immédiates).
+- Si le site a une page `404.html`, elle est affichée pour les adresses
+  introuvables.
 - **Tout supprimer** vide le site ; un site autre que celui du port 8080
   disparaît alors des onglets.
 
@@ -145,14 +152,19 @@ de domaine dans l'onglet du site correspondant.
 ### Content-Security-Policy
 
 Par défaut, les pages statiques ne peuvent charger que leurs propres fichiers
-(scripts, styles, images). Les scripts écrits directement dans le HTML
-(`<script>...</script>`) et les ressources externes (Google Fonts, CDN...)
-sont bloqués. Si ton site en a besoin, ajoute les domaines concernés, par
-exemple :
+(scripts, styles, images, polices, vidéos). Les scripts et styles écrits
+directement dans le HTML sont autorisés, comme dans la plupart des sites
+générés (Astro, Hugo...). Les ressources externes (Google Fonts, CDN, vidéos
+YouTube...) sont bloquées. Si ton site en a besoin, ajoute les domaines
+concernés, par exemple :
 
 ```
-default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 ```
+
+Avant la version 0.6.0, la valeur par défaut bloquait aussi les scripts
+intégrés. Si l'option a gardé cette ancienne valeur, l'app utilise
+automatiquement la nouvelle (le journal l'indique au démarrage).
 
 La console du navigateur (F12) indique ce qui a été bloqué. Les réponses des
 workers ne sont pas concernées.
@@ -160,8 +172,10 @@ workers ne sont pas concernées.
 ### Aperçu dans Home Assistant
 
 Le lien **Voir l'aperçu** du panneau affiche le site à travers
-Home Assistant. Les liens absolus (`/style.css`) n'y fonctionnent pas :
-utilise des liens relatifs (`style.css`), qui fonctionnent partout.
+Home Assistant. Les liens absolus (`/style.css`), courants dans les sites
+générés, n'y fonctionnent pas : styles, images et liens peuvent manquer. Le
+panneau le signale ; ouvre alors le site par son adresse sur le réseau local
+ou sur Internet, qui ne sont pas concernées.
 
 ## 6. Dépannage
 
